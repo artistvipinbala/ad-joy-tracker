@@ -53,28 +53,34 @@ export default function Dashboard() {
     },
   });
 
-  const addSaleMutation = useMutation({
-    mutationFn: async (qty: number) => {
+  const updateSalesMutation = useMutation({
+    mutationFn: async (newCount: number) => {
       const price = Number(productConfig?.price || 499);
       const gstRate = Number(productConfig?.gst_rate_percent || 18) / 100;
-      const amountPerSale = price * (1 + gstRate); // 499 + 18% = 589
-      const totalAmount = amountPerSale * qty;
-      const gstCollected = price * gstRate * qty; // 90 per sale
+      const amountPerSale = price * (1 + gstRate);
+      const totalAmount = amountPerSale * newCount;
+      const gstCollected = price * gstRate * newCount;
+      const today = new Date().toISOString().split("T")[0];
 
-      const { error } = await supabase.from("sales_entries").insert({
-        date: new Date().toISOString().split("T")[0],
-        quantity: qty,
-        amount_per_sale: amountPerSale,
-        total_amount: totalAmount,
-        gst_collected: gstCollected,
-      });
-      if (error) throw error;
+      // Delete all existing sales entries, then insert the new total
+      await supabase.from("sales_entries").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+
+      if (newCount > 0) {
+        const { error } = await supabase.from("sales_entries").insert({
+          date: today,
+          quantity: newCount,
+          amount_per_sale: amountPerSale,
+          total_amount: totalAmount,
+          gst_collected: gstCollected,
+        });
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sales-all"] });
       setSalesDialogOpen(false);
       setEditAmount("");
-      toast.success("Sale added!");
+      toast.success("Total sales updated!");
     },
     onError: (e) => toast.error(e.message),
   });
