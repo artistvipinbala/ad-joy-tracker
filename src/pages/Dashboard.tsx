@@ -84,6 +84,7 @@ export default function Dashboard() {
   const totalGST = salesData?.reduce((s, r) => s + Number(r.gst_collected), 0) ?? 0;
   const totalExpenses = expensesData?.reduce((s, r) => s + Number(r.amount), 0) ?? 0;
   const totalCost = totalSpend + totalExpenses;
+  const netProfit = totalRevenue - totalCost - totalGST;
   const roas = totalSpend > 0 ? totalRevenue / totalSpend : 0;
   const totalSalesCount = salesData?.reduce((s, r) => s + r.quantity, 0) ?? 0;
 
