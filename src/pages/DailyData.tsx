@@ -127,11 +127,17 @@ export default function DailyData() {
           <p className="text-sm text-muted-foreground">ഓരോ ദിവസത്തെയും Facebook Ad metrics</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={() => { setEditRow({ ...defaultRow }); setEditId(null); }}>
-              <Plus className="h-4 w-4 mr-1" /> Add Entry
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleSync} disabled={syncing}>
+              <RefreshCw className={`h-4 w-4 mr-1 ${syncing ? "animate-spin" : ""}`} />
+              {syncing ? "Syncing..." : "Sync FB Ads"}
             </Button>
-          </DialogTrigger>
+            <DialogTrigger asChild>
+              <Button onClick={() => { setEditRow({ ...defaultRow }); setEditId(null); }}>
+                <Plus className="h-4 w-4 mr-1" /> Add Entry
+              </Button>
+            </DialogTrigger>
+          </div>
           <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{editId ? "Edit" : "Add"} Daily Data</DialogTitle>
