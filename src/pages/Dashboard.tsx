@@ -54,15 +54,18 @@ export default function Dashboard() {
   });
 
   const addSaleMutation = useMutation({
-    mutationFn: async (amount: number) => {
+    mutationFn: async (qty: number) => {
+      const price = Number(productConfig?.price || 499);
       const gstRate = Number(productConfig?.gst_rate_percent || 18) / 100;
-      const gstCollected = amount * gstRate / (1 + gstRate);
+      const amountPerSale = price * (1 + gstRate); // 499 + 18% = 589
+      const totalAmount = amountPerSale * qty;
+      const gstCollected = price * gstRate * qty; // 90 per sale
 
       const { error } = await supabase.from("sales_entries").insert({
         date: new Date().toISOString().split("T")[0],
-        quantity: 1,
-        amount_per_sale: amount,
-        total_amount: amount,
+        quantity: qty,
+        amount_per_sale: amountPerSale,
+        total_amount: totalAmount,
         gst_collected: gstCollected,
       });
       if (error) throw error;
@@ -83,6 +86,7 @@ export default function Dashboard() {
   const totalCost = totalSpend + totalExpenses;
   const netProfit = totalRevenue - totalCost - totalGST;
   const roas = totalSpend > 0 ? totalRevenue / totalSpend : 0;
+  const totalSalesCount = salesData?.reduce((s, r) => s + r.quantity, 0) ?? 0;
 
   const chartData = adData?.map((d) => ({
     date: d.date,
@@ -93,7 +97,7 @@ export default function Dashboard() {
 
   const summaryCards = [
     { title: "Total Ad Spend", value: formatINR(totalSpend), icon: IndianRupee, color: "text-destructive" },
-    { title: "Total Sales", value: formatINR(totalRevenue), icon: ShoppingCart, color: "text-success", editable: true },
+    { title: "Total Sales", value: `${totalSalesCount} (${formatINR(totalRevenue)})`, icon: ShoppingCart, color: "text-success", editable: true },
     { title: "Net Profit", value: formatINR(netProfit), icon: netProfit >= 0 ? TrendingUp : TrendingDown, color: netProfit >= 0 ? "text-success" : "text-destructive" },
     { title: "ROAS", value: `${roas.toFixed(2)}x`, icon: Target, color: "text-primary" },
     { title: "GST Collected", value: formatINR(totalGST), icon: Percent, color: "text-warning" },
@@ -136,20 +140,25 @@ export default function Dashboard() {
           </DialogHeader>
           <div className="grid gap-4">
             <div className="space-y-1">
-              <Label className="text-xs">Total Amount (₹)</Label>
+              <Label className="text-xs">Number of Sales (Count)</Label>
               <Input
                 type="number"
-                placeholder="Enter amount..."
+                placeholder="Enter count..."
                 value={editAmount}
                 onChange={(e) => setEditAmount(e.target.value)}
                 autoFocus
               />
+              {editAmount && Number(editAmount) > 0 && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  {Number(editAmount)} × ₹589 (₹499 + ₹90 GST) = <span className="font-semibold text-foreground">{formatINR(Number(editAmount) * 589)}</span>
+                </p>
+              )}
             </div>
             <Button
               onClick={() => {
-                const amt = Number(editAmount);
-                if (!amt || amt <= 0) { toast.error("Enter a valid amount"); return; }
-                addSaleMutation.mutate(amt);
+                const qty = Number(editAmount);
+                if (!qty || qty <= 0) { toast.error("Enter a valid count"); return; }
+                addSaleMutation.mutate(qty);
               }}
               disabled={addSaleMutation.isPending}
             >
