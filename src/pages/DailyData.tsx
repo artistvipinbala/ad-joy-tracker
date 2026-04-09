@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,6 +36,25 @@ export default function DailyData() {
       return data ?? [];
     },
   });
+
+  // Realtime subscription for live updates
+  useEffect(() => {
+    const channel = supabase
+      .channel("ad-daily-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "ad_daily_data" },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["ad-daily"] });
+          queryClient.invalidateQueries({ queryKey: ["ad-data-all"] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
 
   const upsertMutation = useMutation({
     mutationFn: async (row: AdRow & { id?: string }) => {
