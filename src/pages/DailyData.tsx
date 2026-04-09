@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { formatINR, formatNumber, formatPercent } from "@/lib/format";
-import { Plus, Pencil } from "lucide-react";
+import { Plus, Pencil, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 const defaultRow = {
@@ -25,6 +25,26 @@ export default function DailyData() {
   const [editRow, setEditRow] = useState<AdRow | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("sync-facebook-ads", {
+        body: { date_preset: "yesterday" },
+      });
+      if (error) throw error;
+      if (data?.synced > 0) {
+        toast.success(`${data.synced} ദിവസത്തെ data sync ആയി!`);
+      } else {
+        toast.info(data?.message || "Data ഇല്ല ഈ period-ൽ");
+      }
+    } catch (e: any) {
+      toast.error(e.message || "Sync failed");
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const { data: rows, isLoading } = useQuery({
     queryKey: ["ad-daily"],
@@ -107,11 +127,17 @@ export default function DailyData() {
           <p className="text-sm text-muted-foreground">ഓരോ ദിവസത്തെയും Facebook Ad metrics</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={() => { setEditRow({ ...defaultRow }); setEditId(null); }}>
-              <Plus className="h-4 w-4 mr-1" /> Add Entry
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleSync} disabled={syncing}>
+              <RefreshCw className={`h-4 w-4 mr-1 ${syncing ? "animate-spin" : ""}`} />
+              {syncing ? "Syncing..." : "Sync FB Ads"}
             </Button>
-          </DialogTrigger>
+            <DialogTrigger asChild>
+              <Button onClick={() => { setEditRow({ ...defaultRow }); setEditId(null); }}>
+                <Plus className="h-4 w-4 mr-1" /> Add Entry
+              </Button>
+            </DialogTrigger>
+          </div>
           <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{editId ? "Edit" : "Add"} Daily Data</DialogTitle>
