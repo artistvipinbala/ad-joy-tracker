@@ -54,26 +54,23 @@ export default function Dashboard() {
   });
 
   const addSaleMutation = useMutation({
-    mutationFn: async () => {
-      const price = saleForm.amount_per_sale || Number(productConfig?.price || 0);
+    mutationFn: async (amount: number) => {
       const gstRate = Number(productConfig?.gst_rate_percent || 18) / 100;
-      const totalAmount = price * saleForm.quantity;
-      const gstCollected = totalAmount * gstRate / (1 + gstRate);
+      const gstCollected = amount * gstRate / (1 + gstRate);
 
       const { error } = await supabase.from("sales_entries").insert({
-        date: saleForm.date,
-        quantity: saleForm.quantity,
-        amount_per_sale: price,
-        total_amount: totalAmount,
+        date: new Date().toISOString().split("T")[0],
+        quantity: 1,
+        amount_per_sale: amount,
+        total_amount: amount,
         gst_collected: gstCollected,
-        notes: saleForm.notes || null,
       });
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sales-all"] });
       setSalesDialogOpen(false);
-      setSaleForm({ date: new Date().toISOString().split("T")[0], quantity: 1, amount_per_sale: 0, notes: "" });
+      setEditAmount("");
       toast.success("Sale added!");
     },
     onError: (e) => toast.error(e.message),
@@ -86,7 +83,6 @@ export default function Dashboard() {
   const totalCost = totalSpend + totalExpenses;
   const netProfit = totalRevenue - totalCost - totalGST;
   const roas = totalSpend > 0 ? totalRevenue / totalSpend : 0;
-  const totalSalesCount = salesData?.reduce((s, r) => s + r.quantity, 0) ?? 0;
 
   const chartData = adData?.map((d) => ({
     date: d.date,
@@ -97,7 +93,7 @@ export default function Dashboard() {
 
   const summaryCards = [
     { title: "Total Ad Spend", value: formatINR(totalSpend), icon: IndianRupee, color: "text-destructive" },
-    { title: "Total Sales", value: `${totalSalesCount} (${formatINR(totalRevenue)})`, icon: ShoppingCart, color: "text-success", editable: true },
+    { title: "Total Sales", value: formatINR(totalRevenue), icon: ShoppingCart, color: "text-success", editable: true },
     { title: "Net Profit", value: formatINR(netProfit), icon: netProfit >= 0 ? TrendingUp : TrendingDown, color: netProfit >= 0 ? "text-success" : "text-destructive" },
     { title: "ROAS", value: `${roas.toFixed(2)}x`, icon: Target, color: "text-primary" },
     { title: "GST Collected", value: formatINR(totalGST), icon: Percent, color: "text-warning" },
@@ -115,15 +111,7 @@ export default function Dashboard() {
           <Card
             key={card.title}
             className={card.editable ? "cursor-pointer hover:ring-2 hover:ring-primary/30 transition-all" : ""}
-            onClick={card.editable ? () => {
-              setSaleForm({
-                date: new Date().toISOString().split("T")[0],
-                quantity: 1,
-                amount_per_sale: Number(productConfig?.price || 0),
-                notes: "",
-              });
-              setSalesDialogOpen(true);
-            } : undefined}
+            onClick={card.editable ? () => setSalesDialogOpen(true) : undefined}
           >
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-xs font-medium text-muted-foreground">{card.title}</CardTitle>
@@ -142,31 +130,30 @@ export default function Dashboard() {
 
       {/* Quick Add Sale Dialog */}
       <Dialog open={salesDialogOpen} onOpenChange={setSalesDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Quick Add Sale</DialogTitle>
+            <DialogTitle>Add Sale Amount</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs">Date</Label>
-                <Input type="date" value={saleForm.date} onChange={(e) => setSaleForm({ ...saleForm, date: e.target.value })} />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Quantity</Label>
-                <Input type="number" value={saleForm.quantity} onChange={(e) => setSaleForm({ ...saleForm, quantity: Number(e.target.value) })} />
-              </div>
-            </div>
             <div className="space-y-1">
-              <Label className="text-xs">Amount per sale (₹) {productConfig?.price ? `— Default: ₹${productConfig.price}` : ""}</Label>
-              <Input type="number" value={saleForm.amount_per_sale} onChange={(e) => setSaleForm({ ...saleForm, amount_per_sale: Number(e.target.value) })} />
+              <Label className="text-xs">Total Amount (₹)</Label>
+              <Input
+                type="number"
+                placeholder="Enter amount..."
+                value={editAmount}
+                onChange={(e) => setEditAmount(e.target.value)}
+                autoFocus
+              />
             </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Notes (optional)</Label>
-              <Input value={saleForm.notes} onChange={(e) => setSaleForm({ ...saleForm, notes: e.target.value })} />
-            </div>
-            <Button onClick={() => addSaleMutation.mutate()} disabled={addSaleMutation.isPending}>
-              {addSaleMutation.isPending ? "Saving..." : "Add Sale"}
+            <Button
+              onClick={() => {
+                const amt = Number(editAmount);
+                if (!amt || amt <= 0) { toast.error("Enter a valid amount"); return; }
+                addSaleMutation.mutate(amt);
+              }}
+              disabled={addSaleMutation.isPending}
+            >
+              {addSaleMutation.isPending ? "Saving..." : "Add"}
             </Button>
           </div>
         </DialogContent>
