@@ -54,15 +54,18 @@ export default function Dashboard() {
   });
 
   const addSaleMutation = useMutation({
-    mutationFn: async (amount: number) => {
+    mutationFn: async (qty: number) => {
+      const price = Number(productConfig?.price || 499);
       const gstRate = Number(productConfig?.gst_rate_percent || 18) / 100;
-      const gstCollected = amount * gstRate / (1 + gstRate);
+      const amountPerSale = price * (1 + gstRate); // 499 + 18% = 589
+      const totalAmount = amountPerSale * qty;
+      const gstCollected = price * gstRate * qty; // 90 per sale
 
       const { error } = await supabase.from("sales_entries").insert({
         date: new Date().toISOString().split("T")[0],
-        quantity: 1,
-        amount_per_sale: amount,
-        total_amount: amount,
+        quantity: qty,
+        amount_per_sale: amountPerSale,
+        total_amount: totalAmount,
         gst_collected: gstCollected,
       });
       if (error) throw error;
