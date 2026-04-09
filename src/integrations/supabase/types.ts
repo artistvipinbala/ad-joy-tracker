@@ -14,7 +14,188 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      ad_daily_data: {
+        Row: {
+          ad_spend: number
+          clicks: number
+          conversions: number
+          cpc: number
+          cpl: number
+          cpr: number
+          created_at: string
+          ctr: number
+          date: string
+          fifty_percent_views: number
+          frequency: number
+          id: string
+          impressions: number
+          is_manual_override: boolean
+          ninety_five_percent_views: number
+          reach: number
+          three_second_views: number
+          updated_at: string
+        }
+        Insert: {
+          ad_spend?: number
+          clicks?: number
+          conversions?: number
+          cpc?: number
+          cpl?: number
+          cpr?: number
+          created_at?: string
+          ctr?: number
+          date: string
+          fifty_percent_views?: number
+          frequency?: number
+          id?: string
+          impressions?: number
+          is_manual_override?: boolean
+          ninety_five_percent_views?: number
+          reach?: number
+          three_second_views?: number
+          updated_at?: string
+        }
+        Update: {
+          ad_spend?: number
+          clicks?: number
+          conversions?: number
+          cpc?: number
+          cpl?: number
+          cpr?: number
+          created_at?: string
+          ctr?: number
+          date?: string
+          fifty_percent_views?: number
+          frequency?: number
+          id?: string
+          impressions?: number
+          is_manual_override?: boolean
+          ninety_five_percent_views?: number
+          reach?: number
+          three_second_views?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      expense_categories: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      expenses: {
+        Row: {
+          amount: number
+          category_id: string | null
+          created_at: string
+          date: string
+          description: string | null
+          id: string
+        }
+        Insert: {
+          amount?: number
+          category_id?: string | null
+          created_at?: string
+          date: string
+          description?: string | null
+          id?: string
+        }
+        Update: {
+          amount?: number
+          category_id?: string | null
+          created_at?: string
+          date?: string
+          description?: string | null
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expenses_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "expense_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_config: {
+        Row: {
+          created_at: string
+          gst_rate_percent: number
+          id: string
+          is_active: boolean
+          price: number
+          product_name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          gst_rate_percent?: number
+          id?: string
+          is_active?: boolean
+          price?: number
+          product_name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          gst_rate_percent?: number
+          id?: string
+          is_active?: boolean
+          price?: number
+          product_name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      sales_entries: {
+        Row: {
+          amount_per_sale: number
+          created_at: string
+          date: string
+          gst_collected: number
+          id: string
+          notes: string | null
+          quantity: number
+          total_amount: number
+        }
+        Insert: {
+          amount_per_sale?: number
+          created_at?: string
+          date: string
+          gst_collected?: number
+          id?: string
+          notes?: string | null
+          quantity?: number
+          total_amount?: number
+        }
+        Update: {
+          amount_per_sale?: number
+          created_at?: string
+          date?: string
+          gst_collected?: number
+          id?: string
+          notes?: string | null
+          quantity?: number
+          total_amount?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
