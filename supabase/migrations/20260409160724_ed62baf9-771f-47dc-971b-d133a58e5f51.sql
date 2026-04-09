@@ -1,0 +1,1 @@
+ALTER TABLE public.ad_daily_data ADD CONSTRAINT ad_daily_data_date_unique UNIQUE (date);
