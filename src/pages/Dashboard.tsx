@@ -121,35 +121,35 @@ export default function Dashboard() {
           <Card
             key={card.title}
             className={card.editable ? "cursor-pointer hover:ring-2 hover:ring-primary/30 transition-all" : ""}
-            onClick={card.editable ? () => setSalesDialogOpen(true) : undefined}
+            onClick={card.editable ? () => {
+              setEditAmount(String(totalSalesCount));
+              setSalesDialogOpen(true);
+            } : undefined}
           >
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-xs font-medium text-muted-foreground">{card.title}</CardTitle>
-              <div className="flex items-center gap-1">
-                {card.editable && <Plus className="h-3 w-3 text-muted-foreground" />}
-                <card.icon className={`h-4 w-4 ${card.color}`} />
-              </div>
+              <card.icon className={`h-4 w-4 ${card.color}`} />
             </CardHeader>
             <CardContent>
               <p className={`text-lg font-bold ${card.color}`}>{card.value}</p>
-              {card.editable && <p className="text-[10px] text-muted-foreground mt-1">Click to add sale</p>}
+              {card.editable && <p className="text-[10px] text-muted-foreground mt-1">Click to edit</p>}
             </CardContent>
           </Card>
         ))}
       </div>
 
-      {/* Quick Add Sale Dialog */}
+      {/* Edit Total Sales Dialog */}
       <Dialog open={salesDialogOpen} onOpenChange={setSalesDialogOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Add Sale Amount</DialogTitle>
+            <DialogTitle>Edit Total Sales</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4">
             <div className="space-y-1">
-              <Label className="text-xs">Number of Sales (Count)</Label>
+              <Label className="text-xs">Total Sales Count</Label>
               <Input
                 type="number"
-                placeholder="Enter count..."
+                placeholder="Enter total count..."
                 value={editAmount}
                 onChange={(e) => setEditAmount(e.target.value)}
                 autoFocus
@@ -163,12 +163,12 @@ export default function Dashboard() {
             <Button
               onClick={() => {
                 const qty = Number(editAmount);
-                if (!qty || qty <= 0) { toast.error("Enter a valid count"); return; }
-                addSaleMutation.mutate(qty);
+                if (qty < 0) { toast.error("Enter a valid count"); return; }
+                updateSalesMutation.mutate(qty);
               }}
-              disabled={addSaleMutation.isPending}
+              disabled={updateSalesMutation.isPending}
             >
-              {addSaleMutation.isPending ? "Saving..." : "Add"}
+              {updateSalesMutation.isPending ? "Saving..." : "Update"}
             </Button>
           </div>
         </DialogContent>
