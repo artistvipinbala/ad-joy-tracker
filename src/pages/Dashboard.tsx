@@ -16,12 +16,7 @@ import { toast } from "sonner";
 export default function Dashboard() {
   const queryClient = useQueryClient();
   const [salesDialogOpen, setSalesDialogOpen] = useState(false);
-  const [saleForm, setSaleForm] = useState({
-    date: new Date().toISOString().split("T")[0],
-    quantity: 1,
-    amount_per_sale: 0,
-    notes: "",
-  });
+  const [editAmount, setEditAmount] = useState("");
 
   const { data: productConfig } = useQuery({
     queryKey: ["product-config"],
