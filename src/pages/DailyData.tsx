@@ -25,6 +25,26 @@ export default function DailyData() {
   const [editRow, setEditRow] = useState<AdRow | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("sync-facebook-ads", {
+        body: { date_preset: "yesterday" },
+      });
+      if (error) throw error;
+      if (data?.synced > 0) {
+        toast.success(`${data.synced} ദിവസത്തെ data sync ആയി!`);
+      } else {
+        toast.info(data?.message || "Data ഇല്ല ഈ period-ൽ");
+      }
+    } catch (e: any) {
+      toast.error(e.message || "Sync failed");
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const { data: rows, isLoading } = useQuery({
     queryKey: ["ad-daily"],
