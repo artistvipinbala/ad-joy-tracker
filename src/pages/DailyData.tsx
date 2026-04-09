@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { formatINR, formatNumber, formatPercent } from "@/lib/format";
-import { Plus, Pencil } from "lucide-react";
+import { Plus, Pencil, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 const defaultRow = {
