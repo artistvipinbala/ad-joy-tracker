@@ -1,11 +1,17 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { formatINR, formatNumber, formatPercent } from "@/lib/format";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar,
 } from "recharts";
-import { TrendingUp, TrendingDown, IndianRupee, ShoppingCart, Target, Percent } from "lucide-react";
+import { TrendingUp, TrendingDown, IndianRupee, ShoppingCart, Target, Percent, Plus } from "lucide-react";
+import { toast } from "sonner";
 
 export default function Dashboard() {
   const { data: adData } = useQuery({
