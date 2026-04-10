@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
     // Ensure account ID has act_ prefix
     const accountId = adAccountId.startsWith('act_') ? adAccountId : `act_${adAccountId}`
 
-    let url = `${FB_GRAPH_URL}/${accountId}/insights?fields=${fields}&access_token=${accessToken}&level=account`
+    let url = `${FB_GRAPH_URL}/${accountId}/insights?fields=${fields}&access_token=${accessToken}&level=account&time_increment=1`
 
     if (sinceDate && untilDate) {
       url += `&time_range={"since":"${sinceDate}","until":"${untilDate}"}`
