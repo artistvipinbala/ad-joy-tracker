@@ -78,6 +78,7 @@ export default function DailyData() {
       const { data } = await supabase.from("ad_daily_data").select("*").order("date", { ascending: false });
       return data ?? [];
     },
+    refetchInterval: 10 * 60 * 1000, // Auto-refresh every 10 minutes
   });
 
   const { data: salesData } = useQuery({
@@ -86,6 +87,7 @@ export default function DailyData() {
       const { data } = await supabase.from("sales_entries").select("*");
       return data ?? [];
     },
+    refetchInterval: 10 * 60 * 1000,
   });
 
   const { data: expensesData } = useQuery({
@@ -94,6 +96,7 @@ export default function DailyData() {
       const { data } = await supabase.from("expenses").select("*");
       return data ?? [];
     },
+    refetchInterval: 10 * 60 * 1000,
   });
 
   useEffect(() => {
