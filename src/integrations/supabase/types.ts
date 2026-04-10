@@ -168,34 +168,52 @@ export type Database = {
           amount_per_sale: number
           created_at: string
           date: string
+          eur_amount_inr: number
+          eur_quantity: number
+          eur_rate: number
           gpay_quantity: number
           gst_collected: number
           id: string
           notes: string | null
           quantity: number
           total_amount: number
+          usd_amount_inr: number
+          usd_quantity: number
+          usd_rate: number
         }
         Insert: {
           amount_per_sale?: number
           created_at?: string
           date: string
+          eur_amount_inr?: number
+          eur_quantity?: number
+          eur_rate?: number
           gpay_quantity?: number
           gst_collected?: number
           id?: string
           notes?: string | null
           quantity?: number
           total_amount?: number
+          usd_amount_inr?: number
+          usd_quantity?: number
+          usd_rate?: number
         }
         Update: {
           amount_per_sale?: number
           created_at?: string
           date?: string
+          eur_amount_inr?: number
+          eur_quantity?: number
+          eur_rate?: number
           gpay_quantity?: number
           gst_collected?: number
           id?: string
           notes?: string | null
           quantity?: number
           total_amount?: number
+          usd_amount_inr?: number
+          usd_quantity?: number
+          usd_rate?: number
         }
         Relationships: []
       }

@@ -4,12 +4,18 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { formatINR, formatNumber, formatPercent } from "@/lib/format";
-import { Plus, Pencil, RefreshCw } from "lucide-react";
+import {
+  Plus, Pencil, RefreshCw, TrendingUp, TrendingDown, IndianRupee,
+  ShoppingCart, DollarSign, Euro, Target, Percent, Wallet,
+} from "lucide-react";
 import { toast } from "sonner";
+
+const PRICE_PER_SALE = 589;
+const COMMISSION_RATE = 0.025;
 
 const defaultRow = {
   date: new Date().toISOString().split("T")[0],
@@ -26,6 +32,26 @@ export default function DailyData() {
   const [editId, setEditId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
+
+  // Sales edit state
+  const [salesDialogOpen, setSalesDialogOpen] = useState(false);
+  const [salesDate, setSalesDate] = useState("");
+  const [salesTotal, setSalesTotal] = useState("");
+  const [salesGpay, setSalesGpay] = useState("");
+  const [salesUsd, setSalesUsd] = useState("");
+  const [salesEur, setSalesEur] = useState("");
+  const [usdRate, setUsdRate] = useState(0);
+  const [eurRate, setEurRate] = useState(0);
+  const [fetchingRates, setFetchingRates] = useState(false);
+  const [editSalesId, setEditSalesId] = useState<string | null>(null);
+
+  const { data: productConfig } = useQuery({
+    queryKey: ["product-config"],
+    queryFn: async () => {
+      const { data } = await supabase.from("product_config").select("*").eq("is_active", true).limit(1).single();
+      return data;
+    },
+  });
 
   const handleSync = async () => {
     setSyncing(true);
@@ -49,31 +75,39 @@ export default function DailyData() {
   const { data: rows, isLoading } = useQuery({
     queryKey: ["ad-daily"],
     queryFn: async () => {
-      const { data } = await supabase
-        .from("ad_daily_data")
-        .select("*")
-        .order("date", { ascending: false });
+      const { data } = await supabase.from("ad_daily_data").select("*").order("date", { ascending: false });
       return data ?? [];
     },
   });
 
-  // Realtime subscription for live updates
+  const { data: salesData } = useQuery({
+    queryKey: ["sales-all"],
+    queryFn: async () => {
+      const { data } = await supabase.from("sales_entries").select("*");
+      return data ?? [];
+    },
+  });
+
+  const { data: expensesData } = useQuery({
+    queryKey: ["expenses-all"],
+    queryFn: async () => {
+      const { data } = await supabase.from("expenses").select("*");
+      return data ?? [];
+    },
+  });
+
   useEffect(() => {
     const channel = supabase
       .channel("ad-daily-realtime")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "ad_daily_data" },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ["ad-daily"] });
-          queryClient.invalidateQueries({ queryKey: ["ad-data-all"] });
-        }
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "ad_daily_data" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["ad-daily"] });
+        queryClient.invalidateQueries({ queryKey: ["ad-data-all"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "sales_entries" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["sales-all"] });
+      })
       .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [queryClient]);
 
   const upsertMutation = useMutation({
@@ -88,7 +122,6 @@ export default function DailyData() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ad-daily"] });
-      queryClient.invalidateQueries({ queryKey: ["ad-data-all"] });
       setDialogOpen(false);
       setEditRow(null);
       setEditId(null);
@@ -96,6 +129,98 @@ export default function DailyData() {
     },
     onError: (e) => toast.error(e.message),
   });
+
+  const salesMutation = useMutation({
+    mutationFn: async (params: {
+      date: string; quantity: number; gpayQty: number;
+      usdQty: number; eurQty: number; usdRate: number; eurRate: number;
+      existingId?: string | null;
+    }) => {
+      const price = Number(productConfig?.price || 499);
+      const gstRate = Number(productConfig?.gst_rate_percent || 18) / 100;
+      const amountPerSale = price * (1 + gstRate);
+      const inrQty = params.quantity - params.gpayQty - params.usdQty - params.eurQty;
+      const totalAmountInr = inrQty * amountPerSale + params.gpayQty * amountPerSale;
+      const usdAmountInr = params.usdQty * 7 * params.usdRate; // $7 per sale × rate
+      const eurAmountInr = params.eurQty * 7 * params.eurRate; // €7 per sale × rate
+      const gstCollected = price * gstRate * (params.quantity - params.usdQty - params.eurQty);
+
+      const record = {
+        date: params.date,
+        quantity: params.quantity,
+        gpay_quantity: params.gpayQty,
+        usd_quantity: params.usdQty,
+        eur_quantity: params.eurQty,
+        usd_rate: params.usdRate,
+        eur_rate: params.eurRate,
+        usd_amount_inr: usdAmountInr,
+        eur_amount_inr: eurAmountInr,
+        amount_per_sale: amountPerSale,
+        total_amount: totalAmountInr + usdAmountInr + eurAmountInr,
+        gst_collected: gstCollected,
+      };
+
+      if (params.existingId) {
+        const { error } = await supabase.from("sales_entries").update(record).eq("id", params.existingId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("sales_entries").insert(record);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sales-all"] });
+      setSalesDialogOpen(false);
+      toast.success("Sales saved!");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const fetchExchangeRates = async (date: string) => {
+    setFetchingRates(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("get-exchange-rates", {
+        body: { date },
+      });
+      if (error) throw error;
+      setUsdRate(data.usd_to_inr || 0);
+      setEurRate(data.eur_to_inr || 0);
+    } catch (e: any) {
+      toast.error("Rate fetch failed: " + (e.message || "Unknown error"));
+    } finally {
+      setFetchingRates(false);
+    }
+  };
+
+  const openSalesDialog = (date: string) => {
+    const existing = salesData?.find((s) => s.date === date);
+    setSalesDate(date);
+    setSalesTotal(String(existing?.quantity ?? 0));
+    setSalesGpay(String(existing?.gpay_quantity ?? 0));
+    setSalesUsd(String(existing?.usd_quantity ?? 0));
+    setSalesEur(String(existing?.eur_quantity ?? 0));
+    setUsdRate(Number(existing?.usd_rate ?? 0));
+    setEurRate(Number(existing?.eur_rate ?? 0));
+    setEditSalesId(existing?.id ?? null);
+    setSalesDialogOpen(true);
+    fetchExchangeRates(date);
+  };
+
+  const handleSaveSales = () => {
+    const total = Number(salesTotal);
+    const gpay = Number(salesGpay || 0);
+    const usd = Number(salesUsd || 0);
+    const eur = Number(salesEur || 0);
+    if (total < 0 || gpay < 0 || usd < 0 || eur < 0 || (gpay + usd + eur) > total) {
+      toast.error("Invalid values — GPay + USD + EUR cannot exceed total");
+      return;
+    }
+    salesMutation.mutate({
+      date: salesDate, quantity: total, gpayQty: gpay,
+      usdQty: usd, eurQty: eur, usdRate, eurRate,
+      existingId: editSalesId,
+    });
+  };
 
   const handleSave = () => {
     if (!editRow) return;
@@ -119,22 +244,86 @@ export default function DailyData() {
     { key: "conversions", label: "Conversions", type: "number" },
   ];
 
+  // Helper: get sales for a date
+  const getSalesForDate = (date: string) => salesData?.find((s) => s.date === date);
+  const getExpensesForDate = (date: string) =>
+    expensesData?.filter((e) => e.date === date).reduce((s, e) => s + Number(e.amount), 0) ?? 0;
+
+  // Compute daily metrics
+  const computeDayMetrics = (adRow: NonNullable<typeof rows>[0]) => {
+    const sale = getSalesForDate(adRow.date);
+    const qty = sale?.quantity ?? 0;
+    const gpay = sale?.gpay_quantity ?? 0;
+    const usdQty = sale?.usd_quantity ?? 0;
+    const eurQty = sale?.eur_quantity ?? 0;
+    const platformQty = qty - gpay - usdQty - eurQty;
+    const spend = Number(adRow.ad_spend);
+    const expenses = getExpensesForDate(adRow.date);
+
+    const price = Number(productConfig?.price || 499);
+    const gstRate = Number(productConfig?.gst_rate_percent || 18) / 100;
+    const amountPerSale = price * (1 + gstRate);
+
+    const inrRevenue = (platformQty + gpay) * amountPerSale;
+    const usdAmountInr = Number(sale?.usd_amount_inr ?? 0);
+    const eurAmountInr = Number(sale?.eur_amount_inr ?? 0);
+    const totalRevenue = inrRevenue + usdAmountInr + eurAmountInr;
+
+    // Commission: 2.5% on platform INR sales only (not GPay, not USD/EUR)
+    const commission = platformQty * amountPerSale * COMMISSION_RATE;
+    // Also 2.5% on USD/EUR after conversion
+    const usdCommission = usdAmountInr * COMMISSION_RATE;
+    const eurCommission = eurAmountInr * COMMISSION_RATE;
+    const totalCommission = commission + usdCommission + eurCommission;
+
+    const gst = Number(sale?.gst_collected ?? 0);
+    const profit = totalRevenue - totalCommission - spend - expenses - gst;
+    const cac = qty > 0 ? spend / qty : 0;
+
+    return { qty, gpay, usdQty, eurQty, totalRevenue, totalCommission, gst, profit, cac, spend, usdAmountInr, eurAmountInr };
+  };
+
+  // Yearly totals
+  const yearlyTotals = (() => {
+    const totalSpend = rows?.reduce((s, r) => s + Number(r.ad_spend), 0) ?? 0;
+    const totalSales = salesData?.reduce((s, r) => s + r.quantity, 0) ?? 0;
+    const totalGpay = salesData?.reduce((s, r) => s + (r.gpay_quantity ?? 0), 0) ?? 0;
+    const totalUsd = salesData?.reduce((s, r) => s + (r.usd_quantity ?? 0), 0) ?? 0;
+    const totalEur = salesData?.reduce((s, r) => s + (r.eur_quantity ?? 0), 0) ?? 0;
+    const totalRevenue = salesData?.reduce((s, r) => s + Number(r.total_amount), 0) ?? 0;
+    const totalGST = salesData?.reduce((s, r) => s + Number(r.gst_collected), 0) ?? 0;
+    const totalExpenses = expensesData?.reduce((s, r) => s + Number(r.amount), 0) ?? 0;
+    const platformQty = totalSales - totalGpay - totalUsd - totalEur;
+    const usdAmountTotal = salesData?.reduce((s, r) => s + Number(r.usd_amount_inr ?? 0), 0) ?? 0;
+    const eurAmountTotal = salesData?.reduce((s, r) => s + Number(r.eur_amount_inr ?? 0), 0) ?? 0;
+    const price = Number(productConfig?.price || 499);
+    const gstRate = Number(productConfig?.gst_rate_percent || 18) / 100;
+    const amountPerSale = price * (1 + gstRate);
+    const commission = platformQty * amountPerSale * COMMISSION_RATE + (usdAmountTotal + eurAmountTotal) * COMMISSION_RATE;
+    const profit = totalRevenue - commission - totalSpend - totalExpenses - totalGST;
+    const roas = totalSpend > 0 ? totalRevenue / totalSpend : 0;
+    const cac = totalSales > 0 ? totalSpend / totalSales : 0;
+
+    return { totalSpend, totalSales, totalGpay, totalUsd, totalEur, totalRevenue, totalGST, totalExpenses, commission, profit, roas, cac };
+  })();
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Daily Ad Data</h1>
-          <p className="text-sm text-muted-foreground">ഓരോ ദിവസത്തെയും Facebook Ad metrics</p>
+          <h1 className="text-2xl font-bold text-foreground">Daily Ad Data</h1>
+          <p className="text-sm text-muted-foreground">ഓരോ ദിവസത്തെയും Facebook Ad metrics & Sales</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={handleSync} disabled={syncing}>
-              <RefreshCw className={`h-4 w-4 mr-1 ${syncing ? "animate-spin" : ""}`} />
+            <Button variant="outline" onClick={handleSync} disabled={syncing} className="gap-1.5">
+              <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
               {syncing ? "Syncing..." : "Sync FB Ads"}
             </Button>
             <DialogTrigger asChild>
-              <Button onClick={() => { setEditRow({ ...defaultRow }); setEditId(null); }}>
-                <Plus className="h-4 w-4 mr-1" /> Add Entry
+              <Button onClick={() => { setEditRow({ ...defaultRow }); setEditId(null); }} className="gap-1.5">
+                <Plus className="h-4 w-4" /> Add Entry
               </Button>
             </DialogTrigger>
           </div>
@@ -170,87 +359,206 @@ export default function DailyData() {
         </Dialog>
       </div>
 
-      <Card>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Spend</TableHead>
-                  <TableHead>Impressions</TableHead>
-                  <TableHead>Clicks</TableHead>
-                  <TableHead>CTR</TableHead>
-                  <TableHead>CPL</TableHead>
-                  <TableHead>CPR</TableHead>
-                  <TableHead>CPC</TableHead>
-                  <TableHead>3s Views</TableHead>
-                  <TableHead>50%</TableHead>
-                  <TableHead>95%</TableHead>
-                  <TableHead>Freq</TableHead>
-                  <TableHead>Reach</TableHead>
-                  <TableHead>Conv</TableHead>
-                  <TableHead></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading ? (
-                  <TableRow><TableCell colSpan={15} className="text-center py-8 text-muted-foreground">Loading...</TableCell></TableRow>
-                ) : rows && rows.length > 0 ? (
-                  rows.map((r) => (
-                    <TableRow key={r.id}>
-                      <TableCell className="font-medium whitespace-nowrap">{r.date}</TableCell>
-                      <TableCell>{formatINR(Number(r.ad_spend))}</TableCell>
-                      <TableCell>{formatNumber(r.impressions)}</TableCell>
-                      <TableCell>{formatNumber(r.clicks)}</TableCell>
-                      <TableCell>{formatPercent(Number(r.ctr))}</TableCell>
-                      <TableCell>{formatINR(Number(r.cpl))}</TableCell>
-                      <TableCell>{formatINR(Number(r.cpr))}</TableCell>
-                      <TableCell>{formatINR(Number(r.cpc))}</TableCell>
-                      <TableCell>{formatNumber(r.three_second_views)}</TableCell>
-                      <TableCell>{formatNumber(r.fifty_percent_views)}</TableCell>
-                      <TableCell>{formatNumber(r.ninety_five_percent_views)}</TableCell>
-                      <TableCell>{Number(r.frequency).toFixed(2)}</TableCell>
-                      <TableCell>{formatNumber(r.reach)}</TableCell>
-                      <TableCell>{r.conversions}</TableCell>
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => {
-                            setEditRow({
-                              date: r.date,
-                              ad_spend: Number(r.ad_spend),
-                              impressions: r.impressions,
-                              clicks: r.clicks,
-                              ctr: Number(r.ctr),
-                              cpl: Number(r.cpl),
-                              cpr: Number(r.cpr),
-                              cpc: Number(r.cpc),
-                              three_second_views: r.three_second_views,
-                              fifty_percent_views: r.fifty_percent_views,
-                              ninety_five_percent_views: r.ninety_five_percent_views,
-                              frequency: Number(r.frequency),
-                              reach: r.reach,
-                              conversions: r.conversions,
-                            });
-                            setEditId(r.id);
-                            setDialogOpen(true);
-                          }}
-                        >
-                          <Pencil className="h-3 w-3" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow><TableCell colSpan={15} className="text-center py-8 text-muted-foreground">No data yet. Add your first entry!</TableCell></TableRow>
-                )}
-              </TableBody>
-            </Table>
+      {/* Yearly Summary Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+        <MetricCard icon={<IndianRupee className="h-3.5 w-3.5" />} label="Total Ad Spend" value={formatINR(yearlyTotals.totalSpend)} variant="destructive" />
+        <MetricCard icon={<ShoppingCart className="h-3.5 w-3.5" />} label="Total Sales" value={`${yearlyTotals.totalSales}`} variant="success" subtitle={`GPay: ${yearlyTotals.totalGpay} • USD: ${yearlyTotals.totalUsd} • EUR: ${yearlyTotals.totalEur}`} />
+        <MetricCard icon={<Wallet className="h-3.5 w-3.5" />} label="Total Revenue" value={formatINR(yearlyTotals.totalRevenue)} variant="primary" subtitle={`Comm: -${formatINR(yearlyTotals.commission)}`} />
+        <MetricCard icon={yearlyTotals.profit >= 0 ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />} label="Net Profit" value={formatINR(yearlyTotals.profit)} variant={yearlyTotals.profit >= 0 ? "success" : "destructive"} />
+        <MetricCard icon={<Target className="h-3.5 w-3.5" />} label="ROAS" value={`${yearlyTotals.roas.toFixed(2)}x`} variant="primary" />
+        <MetricCard icon={<Percent className="h-3.5 w-3.5" />} label="Avg CAC" value={formatINR(yearlyTotals.cac)} variant="warning" />
+      </div>
+
+      {/* Sales Edit Dialog */}
+      <Dialog open={salesDialogOpen} onOpenChange={setSalesDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShoppingCart className="h-5 w-5" /> Sales — {salesDate}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Total Sales</Label>
+                <Input type="number" value={salesTotal} onChange={(e) => setSalesTotal(e.target.value)} autoFocus />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">GPay (no commission)</Label>
+                <Input type="number" value={salesGpay} onChange={(e) => setSalesGpay(e.target.value)} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs flex items-center gap-1"><DollarSign className="h-3 w-3" /> USD Sales ($7)</Label>
+                <Input type="number" value={salesUsd} onChange={(e) => setSalesUsd(e.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs flex items-center gap-1"><Euro className="h-3 w-3" /> EUR Sales (€7)</Label>
+                <Input type="number" value={salesEur} onChange={(e) => setSalesEur(e.target.value)} />
+              </div>
+            </div>
+            <div className="bg-muted/60 rounded-lg p-3 text-xs space-y-1.5">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">USD Rate</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold">₹{usdRate.toFixed(2)}</span>
+                  {fetchingRates && <RefreshCw className="h-3 w-3 animate-spin text-muted-foreground" />}
+                </div>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">EUR Rate</span>
+                <span className="font-semibold">₹{eurRate.toFixed(2)}</span>
+              </div>
+              {Number(salesUsd || 0) > 0 && (
+                <div className="flex justify-between text-primary">
+                  <span>USD → INR ({salesUsd} × $7 × {usdRate.toFixed(2)})</span>
+                  <span className="font-semibold">{formatINR(Number(salesUsd) * 7 * usdRate)}</span>
+                </div>
+              )}
+              {Number(salesEur || 0) > 0 && (
+                <div className="flex justify-between text-primary">
+                  <span>EUR → INR ({salesEur} × €7 × {eurRate.toFixed(2)})</span>
+                  <span className="font-semibold">{formatINR(Number(salesEur) * 7 * eurRate)}</span>
+                </div>
+              )}
+            </div>
+            <Button onClick={handleSaveSales} disabled={salesMutation.isPending}>
+              {salesMutation.isPending ? "Saving..." : editSalesId ? "Update Sales" : "Add Sales"}
+            </Button>
           </div>
-        </CardContent>
-      </Card>
+        </DialogContent>
+      </Dialog>
+
+      {/* Daily Data Cards */}
+      <div className="space-y-3">
+        {isLoading ? (
+          <Card><CardContent className="py-10 text-center text-muted-foreground">Loading...</CardContent></Card>
+        ) : rows && rows.length > 0 ? (
+          rows.map((r) => {
+            const m = computeDayMetrics(r);
+            const sale = getSalesForDate(r.date);
+            return (
+              <Card key={r.id} className="overflow-hidden hover:shadow-md transition-shadow">
+                {/* Date Header */}
+                <div className="flex items-center justify-between px-4 py-2.5 bg-muted/40 border-b border-border">
+                  <div className="flex items-center gap-3">
+                    <span className="font-semibold text-sm">{r.date}</span>
+                    {m.qty > 0 && (
+                      <Badge variant="secondary" className="text-[10px] font-medium">
+                        {m.qty} sales
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => openSalesDialog(r.date)}>
+                      <ShoppingCart className="h-3 w-3" /> Sales
+                    </Button>
+                    <Button
+                      variant="ghost" size="icon" className="h-7 w-7"
+                      onClick={() => {
+                        setEditRow({
+                          date: r.date, ad_spend: Number(r.ad_spend), impressions: r.impressions,
+                          clicks: r.clicks, ctr: Number(r.ctr), cpl: Number(r.cpl), cpr: Number(r.cpr),
+                          cpc: Number(r.cpc), three_second_views: r.three_second_views,
+                          fifty_percent_views: r.fifty_percent_views,
+                          ninety_five_percent_views: r.ninety_five_percent_views,
+                          frequency: Number(r.frequency), reach: r.reach, conversions: r.conversions,
+                        });
+                        setEditId(r.id);
+                        setDialogOpen(true);
+                      }}
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+
+                <CardContent className="p-4">
+                  {/* Top metrics row: Profit, Revenue, Spend, CAC */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                    <MiniMetric label="Profit" value={formatINR(m.profit)} color={m.profit >= 0 ? "text-green-600" : "text-destructive"} />
+                    <MiniMetric label="Revenue" value={formatINR(m.totalRevenue)} color="text-primary" />
+                    <MiniMetric label="Ad Spend" value={formatINR(m.spend)} color="text-destructive" />
+                    <MiniMetric label="CAC" value={m.cac > 0 ? formatINR(m.cac) : "—"} color="text-amber-600" />
+                  </div>
+
+                  {/* Sales breakdown */}
+                  {m.qty > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      {m.gpay > 0 && <Badge variant="outline" className="text-[10px]">GPay: {m.gpay}</Badge>}
+                      {m.usdQty > 0 && <Badge variant="outline" className="text-[10px]">USD: {m.usdQty} ({formatINR(m.usdAmountInr)})</Badge>}
+                      {m.eurQty > 0 && <Badge variant="outline" className="text-[10px]">EUR: {m.eurQty} ({formatINR(m.eurAmountInr)})</Badge>}
+                      <Badge variant="outline" className="text-[10px] text-muted-foreground">Comm: -{formatINR(m.totalCommission)}</Badge>
+                      {m.gst > 0 && <Badge variant="outline" className="text-[10px] text-amber-600">GST: {formatINR(m.gst)}</Badge>}
+                    </div>
+                  )}
+
+                  {/* Ad metrics grid */}
+                  <div className="grid grid-cols-4 md:grid-cols-7 gap-x-4 gap-y-1.5 text-xs">
+                    <AdMetric label="Impressions" value={formatNumber(r.impressions)} />
+                    <AdMetric label="Clicks" value={formatNumber(r.clicks)} />
+                    <AdMetric label="CTR" value={formatPercent(Number(r.ctr))} />
+                    <AdMetric label="CPC" value={formatINR(Number(r.cpc))} />
+                    <AdMetric label="Reach" value={formatNumber(r.reach)} />
+                    <AdMetric label="Frequency" value={Number(r.frequency).toFixed(2)} />
+                    <AdMetric label="Conv" value={String(r.conversions)} />
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })
+        ) : (
+          <Card className="border-dashed">
+            <CardContent className="py-10 text-center text-muted-foreground">
+              No data yet. Add your first entry or sync from Facebook!
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Sub-components
+function MetricCard({ icon, label, value, variant, subtitle }: {
+  icon: React.ReactNode; label: string; value: string;
+  variant: "destructive" | "success" | "primary" | "warning"; subtitle?: string;
+}) {
+  const colorMap = {
+    destructive: "text-destructive",
+    success: "text-green-600",
+    primary: "text-primary",
+    warning: "text-amber-600",
+  };
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between pb-1 p-3">
+        <CardTitle className="text-[10px] font-medium text-muted-foreground">{label}</CardTitle>
+        <span className={colorMap[variant]}>{icon}</span>
+      </CardHeader>
+      <CardContent className="p-3 pt-0">
+        <p className={`text-sm font-bold ${colorMap[variant]}`}>{value}</p>
+        {subtitle && <p className="text-[9px] text-muted-foreground mt-0.5">{subtitle}</p>}
+      </CardContent>
+    </Card>
+  );
+}
+
+function MiniMetric({ label, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <div className="bg-muted/40 rounded-lg px-3 py-2">
+      <p className="text-[10px] text-muted-foreground">{label}</p>
+      <p className={`text-sm font-bold ${color}`}>{value}</p>
+    </div>
+  );
+}
+
+function AdMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-muted-foreground text-[9px]">{label}</p>
+      <p className="font-medium">{value}</p>
     </div>
   );
 }

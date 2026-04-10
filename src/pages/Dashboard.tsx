@@ -89,15 +89,21 @@ export default function Dashboard() {
   const totalSpend = adData?.reduce((s, r) => s + Number(r.ad_spend), 0) ?? 0;
   const totalSalesCount = salesData?.reduce((s, r) => s + r.quantity, 0) ?? 0;
   const totalGpayCount = salesData?.reduce((s, r) => s + (r.gpay_quantity ?? 0), 0) ?? 0;
-  const platformCount = totalSalesCount - totalGpayCount;
+  const totalUsdCount = salesData?.reduce((s, r) => s + (r.usd_quantity ?? 0), 0) ?? 0;
+  const totalEurCount = salesData?.reduce((s, r) => s + (r.eur_quantity ?? 0), 0) ?? 0;
+  const platformCount = totalSalesCount - totalGpayCount - totalUsdCount - totalEurCount;
 
-  const totalRevenue = totalSalesCount * PRICE_PER_SALE; // Full amount display
+  const totalRevenue = salesData?.reduce((s, r) => s + Number(r.total_amount), 0) ?? 0;
   const totalGST = salesData?.reduce((s, r) => s + Number(r.gst_collected), 0) ?? 0;
   const totalExpenses = expensesData?.reduce((s, r) => s + Number(r.amount), 0) ?? 0;
+  const usdAmountTotal = salesData?.reduce((s, r) => s + Number(r.usd_amount_inr ?? 0), 0) ?? 0;
+  const eurAmountTotal = salesData?.reduce((s, r) => s + Number(r.eur_amount_inr ?? 0), 0) ?? 0;
 
-  // Commission only on platform (non-GPay) sales
-  const commissionDeduction = platformCount * PRICE_PER_SALE * COMMISSION_RATE;
-  const totalIncome = totalRevenue; // Full collected amount
+  const price = Number(productConfig?.price || 499);
+  const gstRate = Number(productConfig?.gst_rate_percent || 18) / 100;
+  const amountPerSale = price * (1 + gstRate);
+  const commissionDeduction = platformCount * amountPerSale * COMMISSION_RATE + (usdAmountTotal + eurAmountTotal) * COMMISSION_RATE;
+  const totalIncome = totalRevenue;
   const netProfit = totalIncome - commissionDeduction - totalSpend - totalExpenses - totalGST;
   const roas = totalSpend > 0 ? totalRevenue / totalSpend : 0;
 
