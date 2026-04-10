@@ -1,0 +1,1 @@
+ALTER TABLE public.sales_entries ADD COLUMN gpay_quantity integer NOT NULL DEFAULT 0;

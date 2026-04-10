@@ -168,6 +168,7 @@ export type Database = {
           amount_per_sale: number
           created_at: string
           date: string
+          gpay_quantity: number
           gst_collected: number
           id: string
           notes: string | null
@@ -178,6 +179,7 @@ export type Database = {
           amount_per_sale?: number
           created_at?: string
           date: string
+          gpay_quantity?: number
           gst_collected?: number
           id?: string
           notes?: string | null
@@ -188,6 +190,7 @@ export type Database = {
           amount_per_sale?: number
           created_at?: string
           date?: string
+          gpay_quantity?: number
           gst_collected?: number
           id?: string
           notes?: string | null

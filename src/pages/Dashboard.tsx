@@ -6,17 +6,21 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { formatINR, formatNumber, formatPercent } from "@/lib/format";
+import { formatINR } from "@/lib/format";
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar,
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
-import { TrendingUp, TrendingDown, IndianRupee, ShoppingCart, Target, Percent, Plus } from "lucide-react";
+import { TrendingUp, TrendingDown, IndianRupee, ShoppingCart, Target, Percent, Wallet, CreditCard } from "lucide-react";
 import { toast } from "sonner";
+
+const PRICE_PER_SALE = 589;
+const COMMISSION_RATE = 0.025; // 2.5%
 
 export default function Dashboard() {
   const queryClient = useQueryClient();
   const [salesDialogOpen, setSalesDialogOpen] = useState(false);
-  const [editAmount, setEditAmount] = useState("");
+  const [editTotal, setEditTotal] = useState("");
+  const [editGpay, setEditGpay] = useState("");
 
   const { data: productConfig } = useQuery({
     queryKey: ["product-config"],
@@ -29,10 +33,7 @@ export default function Dashboard() {
   const { data: adData } = useQuery({
     queryKey: ["ad-data-all"],
     queryFn: async () => {
-      const { data } = await supabase
-        .from("ad_daily_data")
-        .select("*")
-        .order("date", { ascending: true });
+      const { data } = await supabase.from("ad_daily_data").select("*").order("date", { ascending: true });
       return data ?? [];
     },
   });
@@ -54,21 +55,21 @@ export default function Dashboard() {
   });
 
   const updateSalesMutation = useMutation({
-    mutationFn: async (newCount: number) => {
+    mutationFn: async ({ totalQty, gpayQty }: { totalQty: number; gpayQty: number }) => {
       const price = Number(productConfig?.price || 499);
       const gstRate = Number(productConfig?.gst_rate_percent || 18) / 100;
       const amountPerSale = price * (1 + gstRate);
-      const totalAmount = amountPerSale * newCount;
-      const gstCollected = price * gstRate * newCount;
+      const totalAmount = amountPerSale * totalQty;
+      const gstCollected = price * gstRate * totalQty;
       const today = new Date().toISOString().split("T")[0];
 
-      // Delete all existing sales entries, then insert the new total
       await supabase.from("sales_entries").delete().neq("id", "00000000-0000-0000-0000-000000000000");
 
-      if (newCount > 0) {
+      if (totalQty > 0) {
         const { error } = await supabase.from("sales_entries").insert({
           date: today,
-          quantity: newCount,
+          quantity: totalQty,
+          gpay_quantity: gpayQty,
           amount_per_sale: amountPerSale,
           total_amount: totalAmount,
           gst_collected: gstCollected,
@@ -79,35 +80,59 @@ export default function Dashboard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sales-all"] });
       setSalesDialogOpen(false);
-      setEditAmount("");
-      toast.success("Total sales updated!");
+      toast.success("Sales updated!");
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e: Error) => toast.error(e.message),
   });
 
+  // Calculations
   const totalSpend = adData?.reduce((s, r) => s + Number(r.ad_spend), 0) ?? 0;
-  const totalRevenue = salesData?.reduce((s, r) => s + Number(r.total_amount), 0) ?? 0;
+  const totalSalesCount = salesData?.reduce((s, r) => s + r.quantity, 0) ?? 0;
+  const totalGpayCount = salesData?.reduce((s, r) => s + (r.gpay_quantity ?? 0), 0) ?? 0;
+  const platformCount = totalSalesCount - totalGpayCount;
+
+  const totalRevenue = totalSalesCount * PRICE_PER_SALE; // Full amount display
   const totalGST = salesData?.reduce((s, r) => s + Number(r.gst_collected), 0) ?? 0;
   const totalExpenses = expensesData?.reduce((s, r) => s + Number(r.amount), 0) ?? 0;
-  const totalCost = totalSpend + totalExpenses;
-  const netProfit = totalRevenue - totalCost - totalGST;
+
+  // Commission only on platform (non-GPay) sales
+  const commissionDeduction = platformCount * PRICE_PER_SALE * COMMISSION_RATE;
+  const totalIncome = totalRevenue; // Full collected amount
+  const netProfit = totalIncome - commissionDeduction - totalSpend - totalExpenses - totalGST;
   const roas = totalSpend > 0 ? totalRevenue / totalSpend : 0;
-  const totalSalesCount = salesData?.reduce((s, r) => s + r.quantity, 0) ?? 0;
 
-  const chartData = adData?.map((d) => ({
-    date: d.date,
-    spend: Number(d.ad_spend),
-    clicks: d.clicks,
-    ctr: Number(d.ctr),
-  })) ?? [];
+  // Monthly summary from ad data
+  const monthlyMap = new Map<string, { spend: number; clicks: number; impressions: number; reach: number }>();
+  adData?.forEach((d) => {
+    const month = d.date.substring(0, 7); // YYYY-MM
+    const existing = monthlyMap.get(month) || { spend: 0, clicks: 0, impressions: 0, reach: 0 };
+    existing.spend += Number(d.ad_spend);
+    existing.clicks += d.clicks;
+    existing.impressions += d.impressions;
+    existing.reach += d.reach;
+    monthlyMap.set(month, existing);
+  });
+  const monthlyData = Array.from(monthlyMap.entries()).map(([month, data]) => ({ month, ...data }));
 
-  const summaryCards = [
-    { title: "Total Ad Spend", value: formatINR(totalSpend), icon: IndianRupee, color: "text-destructive" },
-    { title: "Total Sales", value: `${totalSalesCount} (${formatINR(totalRevenue)})`, icon: ShoppingCart, color: "text-success", editable: true },
-    { title: "Net Profit", value: formatINR(netProfit), icon: netProfit >= 0 ? TrendingUp : TrendingDown, color: netProfit >= 0 ? "text-success" : "text-destructive" },
-    { title: "ROAS", value: `${roas.toFixed(2)}x`, icon: Target, color: "text-primary" },
-    { title: "GST Collected", value: formatINR(totalGST), icon: Percent, color: "text-warning" },
-  ];
+  // Daily chart data combining ads + sales
+  const dailyChartData = adData?.map((d) => {
+    const daySales = salesData?.filter((s) => s.date === d.date) ?? [];
+    const daySalesQty = daySales.reduce((s, r) => s + r.quantity, 0);
+    const dayGpayQty = daySales.reduce((s, r) => s + (r.gpay_quantity ?? 0), 0);
+    const dayPlatformQty = daySalesQty - dayGpayQty;
+    const dayRevenue = daySalesQty * PRICE_PER_SALE;
+    const dayCommission = dayPlatformQty * PRICE_PER_SALE * COMMISSION_RATE;
+    const dayGST = daySales.reduce((s, r) => s + Number(r.gst_collected), 0);
+    const daySpend = Number(d.ad_spend);
+    const dayProfit = dayRevenue - dayCommission - daySpend - dayGST;
+
+    return {
+      date: d.date.substring(5), // MM-DD
+      spend: daySpend,
+      revenue: dayRevenue,
+      profit: dayProfit,
+    };
+  }) ?? [];
 
   return (
     <div className="space-y-6">
@@ -116,103 +141,237 @@ export default function Dashboard() {
         <p className="text-muted-foreground text-sm">Overview of your ad performance & profit</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-        {summaryCards.map((card) => (
-          <Card
-            key={card.title}
-            className={card.editable ? "cursor-pointer hover:ring-2 hover:ring-primary/30 transition-all" : ""}
-            onClick={card.editable ? () => {
-              setEditAmount(String(totalSalesCount));
-              setSalesDialogOpen(true);
-            } : undefined}
-          >
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-xs font-medium text-muted-foreground">{card.title}</CardTitle>
-              <card.icon className={`h-4 w-4 ${card.color}`} />
-            </CardHeader>
-            <CardContent>
-              <p className={`text-lg font-bold ${card.color}`}>{card.value}</p>
-              {card.editable && <p className="text-[10px] text-muted-foreground mt-1">Click to edit</p>}
-            </CardContent>
-          </Card>
-        ))}
+      {/* Monthly Ad Spend Summary */}
+      {monthlyData.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm">Monthly Ad Summary</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="text-left py-2 px-3 text-muted-foreground font-medium">Month</th>
+                    <th className="text-right py-2 px-3 text-muted-foreground font-medium">Ad Spend</th>
+                    <th className="text-right py-2 px-3 text-muted-foreground font-medium">Clicks</th>
+                    <th className="text-right py-2 px-3 text-muted-foreground font-medium">Impressions</th>
+                    <th className="text-right py-2 px-3 text-muted-foreground font-medium">Reach</th>
+                    <th className="text-right py-2 px-3 text-muted-foreground font-medium">CPC</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {monthlyData.map((m) => (
+                    <tr key={m.month} className="border-b border-border/50 hover:bg-muted/50">
+                      <td className="py-2 px-3 font-medium">{m.month}</td>
+                      <td className="py-2 px-3 text-right text-destructive font-semibold">{formatINR(m.spend)}</td>
+                      <td className="py-2 px-3 text-right">{m.clicks.toLocaleString("en-IN")}</td>
+                      <td className="py-2 px-3 text-right">{m.impressions.toLocaleString("en-IN")}</td>
+                      <td className="py-2 px-3 text-right">{m.reach.toLocaleString("en-IN")}</td>
+                      <td className="py-2 px-3 text-right">{m.clicks > 0 ? formatINR(m.spend / m.clicks) : "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Key Metrics */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-1 p-4">
+            <CardTitle className="text-[11px] font-medium text-muted-foreground">Total Ad Spend</CardTitle>
+            <IndianRupee className="h-3.5 w-3.5 text-destructive" />
+          </CardHeader>
+          <CardContent className="p-4 pt-0">
+            <p className="text-base font-bold text-destructive">{formatINR(totalSpend)}</p>
+          </CardContent>
+        </Card>
+
+        <Card
+          className="cursor-pointer hover:ring-2 hover:ring-primary/30 transition-all"
+          onClick={() => {
+            setEditTotal(String(totalSalesCount));
+            setEditGpay(String(totalGpayCount));
+            setSalesDialogOpen(true);
+          }}
+        >
+          <CardHeader className="flex flex-row items-center justify-between pb-1 p-4">
+            <CardTitle className="text-[11px] font-medium text-muted-foreground">Total Sales</CardTitle>
+            <ShoppingCart className="h-3.5 w-3.5 text-green-600" />
+          </CardHeader>
+          <CardContent className="p-4 pt-0">
+            <p className="text-base font-bold text-green-600">{totalSalesCount} ({formatINR(totalRevenue)})</p>
+            <p className="text-[9px] text-muted-foreground">GPay: {totalGpayCount} • Click to edit</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-1 p-4">
+            <CardTitle className="text-[11px] font-medium text-muted-foreground">Total Income</CardTitle>
+            <Wallet className="h-3.5 w-3.5 text-primary" />
+          </CardHeader>
+          <CardContent className="p-4 pt-0">
+            <p className="text-base font-bold text-primary">{formatINR(totalIncome)}</p>
+            <p className="text-[9px] text-muted-foreground">Commission: -{formatINR(commissionDeduction)}</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-1 p-4">
+            <CardTitle className="text-[11px] font-medium text-muted-foreground">Net Profit</CardTitle>
+            {netProfit >= 0 ? <TrendingUp className="h-3.5 w-3.5 text-green-600" /> : <TrendingDown className="h-3.5 w-3.5 text-destructive" />}
+          </CardHeader>
+          <CardContent className="p-4 pt-0">
+            <p className={`text-base font-bold ${netProfit >= 0 ? "text-green-600" : "text-destructive"}`}>{formatINR(netProfit)}</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-1 p-4">
+            <CardTitle className="text-[11px] font-medium text-muted-foreground">ROAS</CardTitle>
+            <Target className="h-3.5 w-3.5 text-primary" />
+          </CardHeader>
+          <CardContent className="p-4 pt-0">
+            <p className="text-base font-bold text-primary">{roas.toFixed(2)}x</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-1 p-4">
+            <CardTitle className="text-[11px] font-medium text-muted-foreground">GST Collected</CardTitle>
+            <Percent className="h-3.5 w-3.5 text-amber-500" />
+          </CardHeader>
+          <CardContent className="p-4 pt-0">
+            <p className="text-base font-bold text-amber-500">{formatINR(totalGST)}</p>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Edit Total Sales Dialog */}
+      {/* Edit Sales Dialog */}
       <Dialog open={salesDialogOpen} onOpenChange={setSalesDialogOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Edit Total Sales</DialogTitle>
+            <DialogTitle>Edit Sales</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4">
             <div className="space-y-1">
-              <Label className="text-xs">Total Sales Count</Label>
+              <Label className="text-xs font-semibold">Total Sales Count</Label>
               <Input
                 type="number"
-                placeholder="Enter total count..."
-                value={editAmount}
-                onChange={(e) => setEditAmount(e.target.value)}
+                placeholder="Total sales..."
+                value={editTotal}
+                onChange={(e) => setEditTotal(e.target.value)}
                 autoFocus
               />
-              {editAmount && Number(editAmount) > 0 && (
-                <p className="text-xs text-muted-foreground mt-2">
-                  {Number(editAmount)} × ₹589 (₹499 + ₹90 GST) = <span className="font-semibold text-foreground">{formatINR(Number(editAmount) * 589)}</span>
-                </p>
-              )}
             </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">GPay Direct Payments</Label>
+              <Input
+                type="number"
+                placeholder="GPay count..."
+                value={editGpay}
+                onChange={(e) => setEditGpay(e.target.value)}
+                className="h-8 text-sm"
+              />
+              <p className="text-[10px] text-muted-foreground">No 2.5% commission on GPay payments</p>
+            </div>
+            {editTotal && Number(editTotal) > 0 && (
+              <div className="bg-muted/50 rounded-md p-3 text-xs space-y-1">
+                <div className="flex justify-between">
+                  <span>Total Revenue</span>
+                  <span className="font-semibold">{formatINR(Number(editTotal) * PRICE_PER_SALE)}</span>
+                </div>
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Platform ({Number(editTotal) - Number(editGpay || 0)}) × 2.5%</span>
+                  <span>-{formatINR((Number(editTotal) - Number(editGpay || 0)) * PRICE_PER_SALE * COMMISSION_RATE)}</span>
+                </div>
+                <div className="flex justify-between text-muted-foreground">
+                  <span>GPay ({Number(editGpay || 0)}) — no commission</span>
+                  <span className="text-green-600">₹0</span>
+                </div>
+              </div>
+            )}
             <Button
               onClick={() => {
-                const qty = Number(editAmount);
-                if (qty < 0) { toast.error("Enter a valid count"); return; }
-                updateSalesMutation.mutate(qty);
+                const total = Number(editTotal);
+                const gpay = Number(editGpay || 0);
+                if (total < 0 || gpay < 0 || gpay > total) {
+                  toast.error("Invalid values");
+                  return;
+                }
+                updateSalesMutation.mutate({ totalQty: total, gpayQty: gpay });
               }}
               disabled={updateSalesMutation.isPending}
             >
-              {updateSalesMutation.isPending ? "Saving..." : "Update"}
+              {updateSalesMutation.isPending ? "Saving..." : "Update Sales"}
             </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Daily Trend Line Chart */}
+      {dailyChartData.length > 0 && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Daily Ad Spend</CardTitle>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">Daily Trends — Spend vs Revenue vs Profit</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-64">
+            <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                  <XAxis dataKey="date" tick={{ fontSize: 10 }} className="text-muted-foreground" />
-                  <YAxis tick={{ fontSize: 10 }} />
-                  <Tooltip />
-                  <Bar dataKey="spend" fill="hsl(230, 70%, 55%)" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">CTR Trend</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData}>
+                <LineChart data={dailyChartData}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                   <XAxis dataKey="date" tick={{ fontSize: 10 }} />
                   <YAxis tick={{ fontSize: 10 }} />
-                  <Tooltip />
-                  <Line type="monotone" dataKey="ctr" stroke="hsl(160, 60%, 45%)" strokeWidth={2} dot={false} />
+                  <Tooltip formatter={(v: number) => formatINR(v)} />
+                  <Legend />
+                  <Line type="monotone" dataKey="spend" name="Ad Spend" stroke="hsl(0, 72%, 55%)" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="revenue" name="Revenue" stroke="hsl(145, 60%, 42%)" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="profit" name="Profit" stroke="hsl(230, 70%, 55%)" strokeWidth={2} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
           </CardContent>
         </Card>
-      </div>
+      )}
+
+      {/* Daily Data Table */}
+      {adData && adData.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">Day-by-Day Breakdown</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-border">
+                    {["Date", "Ad Spend", "Clicks", "CTR", "CPL", "Impressions", "Reach", "Frequency"].map((h) => (
+                      <th key={h} className="text-right py-2 px-2 text-muted-foreground font-medium first:text-left">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {adData.map((d) => (
+                    <tr key={d.id} className="border-b border-border/30 hover:bg-muted/30">
+                      <td className="py-1.5 px-2 font-medium">{d.date}</td>
+                      <td className="py-1.5 px-2 text-right text-destructive">{formatINR(Number(d.ad_spend))}</td>
+                      <td className="py-1.5 px-2 text-right">{d.clicks}</td>
+                      <td className="py-1.5 px-2 text-right">{Number(d.ctr).toFixed(2)}%</td>
+                      <td className="py-1.5 px-2 text-right">{formatINR(Number(d.cpl))}</td>
+                      <td className="py-1.5 px-2 text-right">{d.impressions.toLocaleString("en-IN")}</td>
+                      <td className="py-1.5 px-2 text-right">{d.reach.toLocaleString("en-IN")}</td>
+                      <td className="py-1.5 px-2 text-right">{Number(d.frequency).toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {(!adData || adData.length === 0) && (
         <Card className="border-dashed">
