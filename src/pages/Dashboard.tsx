@@ -188,7 +188,7 @@ export default function Dashboard() {
       )}
 
       {/* Key Metrics */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-1 p-4">
             <CardTitle className="text-[11px] font-medium text-muted-foreground">Ad Spend (excl GST)</CardTitle>
