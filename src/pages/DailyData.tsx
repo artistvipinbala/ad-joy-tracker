@@ -56,14 +56,26 @@ export default function DailyData() {
   const handleSync = async () => {
     setSyncing(true);
     try {
+      const now = new Date();
+      const today = new Date(now.getTime() - now.getTimezoneOffset() * 60_000)
+        .toISOString()
+        .split("T")[0];
+
       const { data, error } = await supabase.functions.invoke("sync-facebook-ads", {
-        body: { date_preset: "yesterday" },
+        body: { since: today, until: today },
       });
+
       if (error) throw error;
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["ad-daily"] }),
+        queryClient.invalidateQueries({ queryKey: ["ad-data-all"] }),
+      ]);
+
       if (data?.synced > 0) {
-        toast.success(`${data.synced} ദിവസത്തെ data sync ആയി!`);
+        toast.success("ഇന്നത്തെ FB Ads data sync ആയി!");
       } else {
-        toast.info(data?.message || "Data ഇല്ല ഈ period-ൽ");
+        toast.info(data?.message || "ഇന്നത്തേക്കുള്ള data ഇല്ല");
       }
     } catch (e: any) {
       toast.error(e.message || "Sync failed");
