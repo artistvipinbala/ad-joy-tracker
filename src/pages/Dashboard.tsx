@@ -106,9 +106,9 @@ export default function Dashboard() {
   const amountPerSale = price * (1 + gstRate);
   const commissionDeduction = platformCount * amountPerSale * COMMISSION_RATE + (usdAmountTotal + eurAmountTotal) * COMMISSION_RATE;
   const totalIncome = totalRevenue;
+  const gstPayable = totalGST - adGst; // GST collected minus input credit from ads
   const netProfit = totalIncome - commissionDeduction - totalSpendWithGst - totalExpenses - gstPayable;
   const roas = totalSpendWithGst > 0 ? totalRevenue / totalSpendWithGst : 0;
-  const gstPayable = totalGST - adGst; // GST collected minus input credit from ads
 
   // Monthly summary from ad data
   const monthlyMap = new Map<string, { spend: number; clicks: number; impressions: number; reach: number }>();
