@@ -225,7 +225,7 @@ export default function Dashboard() {
             <ShoppingCart className="h-3.5 w-3.5 text-green-600" />
           </CardHeader>
           <CardContent className="p-4 pt-0">
-            <p className="text-base font-bold text-green-600">{totalSalesCount} ({formatINR(totalRevenue)})</p>
+            <p className="text-base font-bold text-green-600">{totalSalesCount}</p>
             <p className="text-[9px] text-muted-foreground">GPay: {totalGpayCount} • Click to edit</p>
           </CardContent>
         </Card>
