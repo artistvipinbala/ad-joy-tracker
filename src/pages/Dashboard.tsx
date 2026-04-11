@@ -106,7 +106,7 @@ export default function Dashboard() {
   const amountPerSale = price * (1 + gstRate);
   const commissionDeduction = platformCount * amountPerSale * COMMISSION_RATE + (usdAmountTotal + eurAmountTotal) * COMMISSION_RATE;
   const totalIncome = totalRevenue;
-  const netProfit = totalIncome - commissionDeduction - totalSpendWithGst - totalExpenses - totalGST;
+  const netProfit = totalIncome - commissionDeduction - totalSpendWithGst - totalExpenses - gstPayable;
   const roas = totalSpendWithGst > 0 ? totalRevenue / totalSpendWithGst : 0;
   const gstPayable = totalGST - adGst; // GST collected minus input credit from ads
 
