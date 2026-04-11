@@ -86,7 +86,9 @@ export default function Dashboard() {
   });
 
   // Calculations
-  const totalSpend = adData?.reduce((s, r) => s + Number(r.ad_spend), 0) ?? 0;
+  const totalSpendRaw = adData?.reduce((s, r) => s + Number(r.ad_spend), 0) ?? 0;
+  const adGst = totalSpendRaw * 0.18;
+  const totalSpendWithGst = totalSpendRaw + adGst;
   const totalSalesCount = salesData?.reduce((s, r) => s + r.quantity, 0) ?? 0;
   const totalGpayCount = salesData?.reduce((s, r) => s + (r.gpay_quantity ?? 0), 0) ?? 0;
   const totalUsdCount = salesData?.reduce((s, r) => s + (r.usd_quantity ?? 0), 0) ?? 0;
@@ -104,8 +106,9 @@ export default function Dashboard() {
   const amountPerSale = price * (1 + gstRate);
   const commissionDeduction = platformCount * amountPerSale * COMMISSION_RATE + (usdAmountTotal + eurAmountTotal) * COMMISSION_RATE;
   const totalIncome = totalRevenue;
-  const netProfit = totalIncome - commissionDeduction - totalSpend - totalExpenses - totalGST;
-  const roas = totalSpend > 0 ? totalRevenue / totalSpend : 0;
+  const netProfit = totalIncome - commissionDeduction - totalSpendWithGst - totalExpenses - totalGST;
+  const roas = totalSpendWithGst > 0 ? totalRevenue / totalSpendWithGst : 0;
+  const gstPayable = totalGST - adGst; // GST collected minus input credit from ads
 
   // Monthly summary from ad data
   const monthlyMap = new Map<string, { spend: number; clicks: number; impressions: number; reach: number }>();
