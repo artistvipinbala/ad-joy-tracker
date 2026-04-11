@@ -24,13 +24,16 @@ export function AppSidebar() {
 
   return (
     <aside className="fixed left-0 top-0 z-40 h-screen w-64 bg-sidebar border-r border-sidebar-border flex flex-col">
-      <div className="p-6 border-b border-sidebar-border">
-        <h1 className="text-xl font-bold text-sidebar-primary-foreground">
-          📊 Ad Analytics
-        </h1>
-        <p className="text-xs text-sidebar-foreground/60 mt-1">
-          Facebook Ads + TagMango
-        </p>
+      <div className="p-6 border-b border-sidebar-border flex items-center gap-3">
+        <img src={logo} alt="Logo" className="h-10 w-10 rounded-lg" />
+        <div>
+          <h1 className="text-lg font-bold text-sidebar-primary-foreground">
+            Artist Vipin Bala
+          </h1>
+          <p className="text-xs text-sidebar-foreground/60">
+            Facebook Ads + TagMango
+          </p>
+        </div>
       </div>
       <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
         {navItems.map((item) => {
