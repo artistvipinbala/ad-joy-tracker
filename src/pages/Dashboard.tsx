@@ -86,7 +86,9 @@ export default function Dashboard() {
   });
 
   // Calculations
-  const totalSpend = adData?.reduce((s, r) => s + Number(r.ad_spend), 0) ?? 0;
+  const totalSpendRaw = adData?.reduce((s, r) => s + Number(r.ad_spend), 0) ?? 0;
+  const adGst = totalSpendRaw * 0.18;
+  const totalSpendWithGst = totalSpendRaw + adGst;
   const totalSalesCount = salesData?.reduce((s, r) => s + r.quantity, 0) ?? 0;
   const totalGpayCount = salesData?.reduce((s, r) => s + (r.gpay_quantity ?? 0), 0) ?? 0;
   const totalUsdCount = salesData?.reduce((s, r) => s + (r.usd_quantity ?? 0), 0) ?? 0;
@@ -104,8 +106,9 @@ export default function Dashboard() {
   const amountPerSale = price * (1 + gstRate);
   const commissionDeduction = platformCount * amountPerSale * COMMISSION_RATE + (usdAmountTotal + eurAmountTotal) * COMMISSION_RATE;
   const totalIncome = totalRevenue;
-  const netProfit = totalIncome - commissionDeduction - totalSpend - totalExpenses - totalGST;
-  const roas = totalSpend > 0 ? totalRevenue / totalSpend : 0;
+  const netProfit = totalIncome - commissionDeduction - totalSpendWithGst - totalExpenses - totalGST;
+  const roas = totalSpendWithGst > 0 ? totalRevenue / totalSpendWithGst : 0;
+  const gstPayable = totalGST - adGst; // GST collected minus input credit from ads
 
   // Monthly summary from ad data
   const monthlyMap = new Map<string, { spend: number; clicks: number; impressions: number; reach: number }>();
@@ -160,6 +163,7 @@ export default function Dashboard() {
                   <tr className="border-b border-border">
                     <th className="text-left py-2 px-3 text-muted-foreground font-medium">Month</th>
                     <th className="text-right py-2 px-3 text-muted-foreground font-medium">Ad Spend</th>
+                    <th className="text-right py-2 px-3 text-muted-foreground font-medium">With GST</th>
                     <th className="text-right py-2 px-3 text-muted-foreground font-medium">Clicks</th>
                     <th className="text-right py-2 px-3 text-muted-foreground font-medium">Impressions</th>
                     <th className="text-right py-2 px-3 text-muted-foreground font-medium">Reach</th>
@@ -171,6 +175,7 @@ export default function Dashboard() {
                     <tr key={m.month} className="border-b border-border/50 hover:bg-muted/50">
                       <td className="py-2 px-3 font-medium">{m.month}</td>
                       <td className="py-2 px-3 text-right text-destructive font-semibold">{formatINR(m.spend)}</td>
+                      <td className="py-2 px-3 text-right text-destructive">{formatINR(m.spend * 1.18)}</td>
                       <td className="py-2 px-3 text-right">{m.clicks.toLocaleString("en-IN")}</td>
                       <td className="py-2 px-3 text-right">{m.impressions.toLocaleString("en-IN")}</td>
                       <td className="py-2 px-3 text-right">{m.reach.toLocaleString("en-IN")}</td>
@@ -185,14 +190,25 @@ export default function Dashboard() {
       )}
 
       {/* Key Metrics */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-1 p-4">
-            <CardTitle className="text-[11px] font-medium text-muted-foreground">Total Ad Spend</CardTitle>
+            <CardTitle className="text-[11px] font-medium text-muted-foreground">Ad Spend (excl GST)</CardTitle>
             <IndianRupee className="h-3.5 w-3.5 text-destructive" />
           </CardHeader>
           <CardContent className="p-4 pt-0">
-            <p className="text-base font-bold text-destructive">{formatINR(totalSpend)}</p>
+            <p className="text-base font-bold text-destructive">{formatINR(totalSpendRaw)}</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-1 p-4">
+            <CardTitle className="text-[11px] font-medium text-muted-foreground">Ad Spend (incl GST)</CardTitle>
+            <CreditCard className="h-3.5 w-3.5 text-destructive" />
+          </CardHeader>
+          <CardContent className="p-4 pt-0">
+            <p className="text-base font-bold text-destructive">{formatINR(totalSpendWithGst)}</p>
+            <p className="text-[9px] text-muted-foreground">GST: {formatINR(adGst)}</p>
           </CardContent>
         </Card>
 
@@ -252,6 +268,17 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent className="p-4 pt-0">
             <p className="text-base font-bold text-amber-500">{formatINR(totalGST)}</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-1 p-4">
+            <CardTitle className="text-[11px] font-medium text-muted-foreground">GST Payable</CardTitle>
+            <Percent className="h-3.5 w-3.5 text-primary" />
+          </CardHeader>
+          <CardContent className="p-4 pt-0">
+            <p className={`text-base font-bold ${gstPayable >= 0 ? "text-amber-500" : "text-green-600"}`}>{formatINR(gstPayable)}</p>
+            <p className="text-[9px] text-muted-foreground">Collected - Ad GST Credit</p>
           </CardContent>
         </Card>
       </div>
