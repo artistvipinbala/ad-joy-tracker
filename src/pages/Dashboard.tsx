@@ -191,11 +191,22 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-1 p-4">
-            <CardTitle className="text-[11px] font-medium text-muted-foreground">Total Ad Spend</CardTitle>
+            <CardTitle className="text-[11px] font-medium text-muted-foreground">Ad Spend (excl GST)</CardTitle>
             <IndianRupee className="h-3.5 w-3.5 text-destructive" />
           </CardHeader>
           <CardContent className="p-4 pt-0">
-            <p className="text-base font-bold text-destructive">{formatINR(totalSpend)}</p>
+            <p className="text-base font-bold text-destructive">{formatINR(totalSpendRaw)}</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-1 p-4">
+            <CardTitle className="text-[11px] font-medium text-muted-foreground">Ad Spend (incl GST)</CardTitle>
+            <CreditCard className="h-3.5 w-3.5 text-destructive" />
+          </CardHeader>
+          <CardContent className="p-4 pt-0">
+            <p className="text-base font-bold text-destructive">{formatINR(totalSpendWithGst)}</p>
+            <p className="text-[9px] text-muted-foreground">GST: {formatINR(adGst)}</p>
           </CardContent>
         </Card>
 
@@ -255,6 +266,17 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent className="p-4 pt-0">
             <p className="text-base font-bold text-amber-500">{formatINR(totalGST)}</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-1 p-4">
+            <CardTitle className="text-[11px] font-medium text-muted-foreground">GST Payable</CardTitle>
+            <Percent className="h-3.5 w-3.5 text-primary" />
+          </CardHeader>
+          <CardContent className="p-4 pt-0">
+            <p className={`text-base font-bold ${gstPayable >= 0 ? "text-amber-500" : "text-green-600"}`}>{formatINR(gstPayable)}</p>
+            <p className="text-[9px] text-muted-foreground">Collected - Ad GST Credit</p>
           </CardContent>
         </Card>
       </div>
