@@ -163,6 +163,7 @@ export default function Dashboard() {
                   <tr className="border-b border-border">
                     <th className="text-left py-2 px-3 text-muted-foreground font-medium">Month</th>
                     <th className="text-right py-2 px-3 text-muted-foreground font-medium">Ad Spend</th>
+                    <th className="text-right py-2 px-3 text-muted-foreground font-medium">With GST</th>
                     <th className="text-right py-2 px-3 text-muted-foreground font-medium">Clicks</th>
                     <th className="text-right py-2 px-3 text-muted-foreground font-medium">Impressions</th>
                     <th className="text-right py-2 px-3 text-muted-foreground font-medium">Reach</th>
@@ -174,6 +175,7 @@ export default function Dashboard() {
                     <tr key={m.month} className="border-b border-border/50 hover:bg-muted/50">
                       <td className="py-2 px-3 font-medium">{m.month}</td>
                       <td className="py-2 px-3 text-right text-destructive font-semibold">{formatINR(m.spend)}</td>
+                      <td className="py-2 px-3 text-right text-destructive">{formatINR(m.spend * 1.18)}</td>
                       <td className="py-2 px-3 text-right">{m.clicks.toLocaleString("en-IN")}</td>
                       <td className="py-2 px-3 text-right">{m.impressions.toLocaleString("en-IN")}</td>
                       <td className="py-2 px-3 text-right">{m.reach.toLocaleString("en-IN")}</td>
