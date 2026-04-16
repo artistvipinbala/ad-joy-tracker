@@ -627,7 +627,7 @@ export default function DailyData() {
         {isLoading ? (
           <Card><CardContent className="py-10 text-center text-muted-foreground">Loading...</CardContent></Card>
         ) : rows && rows.length > 0 ? (
-          rows.map((r) => {
+          rows.filter((r) => r.date >= currentMonthStart && r.date <= currentMonthEnd).map((r) => {
             const m = computeDayMetrics(r);
             const sale = getSalesForDate(r.date);
             return (
