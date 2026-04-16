@@ -7,10 +7,12 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { formatINR, formatNumber, formatPercent } from "@/lib/format";
 import {
   Plus, Pencil, RefreshCw, TrendingUp, TrendingDown, IndianRupee,
-  ShoppingCart, DollarSign, Euro, Target, Percent, Wallet,
+  ShoppingCart, DollarSign, Euro, Target, Percent, Wallet, ChevronDown, ChevronRight,
+  Megaphone, Layers, FileImage,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -56,13 +58,17 @@ export default function DailyData() {
   const handleSync = async () => {
     setSyncing(true);
     try {
+      // Sync last 30 days to catch all missing data
       const now = new Date();
       const today = new Date(now.getTime() - now.getTimezoneOffset() * 60_000)
         .toISOString()
         .split("T")[0];
+      const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000 - now.getTimezoneOffset() * 60_000)
+        .toISOString()
+        .split("T")[0];
 
       const { data, error } = await supabase.functions.invoke("sync-facebook-ads", {
-        body: { since: today, until: today },
+        body: { since: monthAgo, until: today },
       });
 
       if (error) throw error;
@@ -70,12 +76,13 @@ export default function DailyData() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["ad-daily"] }),
         queryClient.invalidateQueries({ queryKey: ["ad-data-all"] }),
+        queryClient.invalidateQueries({ queryKey: ["ad-breakdown"] }),
       ]);
 
-      if (data?.synced > 0) {
-        toast.success("ഇന്നത്തെ FB Ads data sync ആയി!");
+      if (data?.synced > 0 || data?.breakdown_synced > 0) {
+        toast.success(`Synced! Account: ${data.synced} days, Campaigns: ${data.breakdown_synced} entries`);
       } else {
-        toast.info(data?.message || "ഇന്നത്തേക്കുള്ള data ഇല്ല");
+        toast.info(data?.message || "No new data found");
       }
     } catch (e: any) {
       toast.error(e.message || "Sync failed");
@@ -109,6 +116,30 @@ export default function DailyData() {
       return data ?? [];
     },
     refetchInterval: 10 * 60 * 1000,
+  });
+
+  const { data: breakdownData } = useQuery({
+    queryKey: ["ad-breakdown"],
+    queryFn: async () => {
+      const { data } = await supabase.from("ad_breakdown").select("*").order("date", { ascending: false });
+      return data ?? [];
+    },
+    refetchInterval: 10 * 60 * 1000,
+  });
+
+  const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
+  const toggleDate = (date: string) => {
+    setExpandedDates((prev) => {
+      const next = new Set(prev);
+      if (next.has(date)) next.delete(date); else next.add(date);
+      return next;
+    });
+  };
+
+  const getBreakdownForDate = (date: string) => ({
+    campaigns: breakdownData?.filter((b) => b.date === date && b.level === "campaign") ?? [],
+    adsets: breakdownData?.filter((b) => b.date === date && b.level === "adset") ?? [],
+    ads: breakdownData?.filter((b) => b.date === date && b.level === "ad") ?? [],
   });
 
   useEffect(() => {
@@ -519,6 +550,60 @@ export default function DailyData() {
                     <AdMetric label="Frequency" value={Number(r.frequency).toFixed(2)} />
                     <AdMetric label="Conv" value={String(r.conversions)} />
                   </div>
+
+                  {/* Campaign Breakdown Dropdown */}
+                  {(() => {
+                    const bd = getBreakdownForDate(r.date);
+                    const hasBreakdown = bd.campaigns.length > 0 || bd.adsets.length > 0 || bd.ads.length > 0;
+                    if (!hasBreakdown) return null;
+                    const isExpanded = expandedDates.has(r.date);
+                    return (
+                      <Collapsible open={isExpanded} onOpenChange={() => toggleDate(r.date)} className="mt-3">
+                        <CollapsibleTrigger asChild>
+                          <Button variant="ghost" size="sm" className="w-full h-8 text-xs gap-1.5 text-muted-foreground hover:text-foreground">
+                            {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                            <Megaphone className="h-3 w-3" />
+                            {bd.campaigns.length} Campaigns • {bd.adsets.length} Ad Sets • {bd.ads.length} Ads
+                          </Button>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent className="mt-2 space-y-3">
+                          {/* Campaigns */}
+                          {bd.campaigns.length > 0 && (
+                            <div className="space-y-1.5">
+                              <p className="text-[10px] font-semibold text-muted-foreground flex items-center gap-1">
+                                <Megaphone className="h-3 w-3" /> CAMPAIGNS
+                              </p>
+                              {bd.campaigns.map((c) => (
+                                <BreakdownRow key={c.id} name={c.campaign_name || "Unknown"} data={c} />
+                              ))}
+                            </div>
+                          )}
+                          {/* Ad Sets */}
+                          {bd.adsets.length > 0 && (
+                            <div className="space-y-1.5">
+                              <p className="text-[10px] font-semibold text-muted-foreground flex items-center gap-1">
+                                <Layers className="h-3 w-3" /> AD SETS
+                              </p>
+                              {bd.adsets.map((a) => (
+                                <BreakdownRow key={a.id} name={a.adset_name || "Unknown"} data={a} subtitle={a.campaign_name} />
+                              ))}
+                            </div>
+                          )}
+                          {/* Ads */}
+                          {bd.ads.length > 0 && (
+                            <div className="space-y-1.5">
+                              <p className="text-[10px] font-semibold text-muted-foreground flex items-center gap-1">
+                                <FileImage className="h-3 w-3" /> ADS
+                              </p>
+                              {bd.ads.map((a) => (
+                                <BreakdownRow key={a.id} name={a.ad_name || "Unknown"} data={a} subtitle={a.adset_name} />
+                              ))}
+                            </div>
+                          )}
+                        </CollapsibleContent>
+                      </Collapsible>
+                    );
+                  })()}
                 </CardContent>
               </Card>
             );
@@ -574,6 +659,28 @@ function AdMetric({ label, value }: { label: string; value: string }) {
     <div>
       <p className="text-muted-foreground text-[9px]">{label}</p>
       <p className="font-medium">{value}</p>
+    </div>
+  );
+}
+
+function BreakdownRow({ name, data, subtitle }: { name: string; data: any; subtitle?: string | null }) {
+  return (
+    <div className="bg-muted/30 rounded-lg px-3 py-2 border border-border/50">
+      <div className="flex items-center justify-between mb-1">
+        <div>
+          <p className="text-xs font-medium truncate max-w-[200px]">{name}</p>
+          {subtitle && <p className="text-[9px] text-muted-foreground truncate max-w-[200px]">{subtitle}</p>}
+        </div>
+        <span className="text-xs font-bold text-destructive">{formatINR(Number(data.spend))}</span>
+      </div>
+      <div className="grid grid-cols-4 md:grid-cols-6 gap-x-3 gap-y-1 text-[10px]">
+        <div><span className="text-muted-foreground">Clicks</span> <span className="font-medium block">{data.clicks}</span></div>
+        <div><span className="text-muted-foreground">CTR</span> <span className="font-medium block">{formatPercent(Number(data.ctr))}</span></div>
+        <div><span className="text-muted-foreground">CPC</span> <span className="font-medium block">{formatINR(Number(data.cpc))}</span></div>
+        <div><span className="text-muted-foreground">CPR</span> <span className="font-medium block">{Number(data.cpr) > 0 ? formatINR(Number(data.cpr)) : "—"}</span></div>
+        <div><span className="text-muted-foreground">Reach</span> <span className="font-medium block">{formatNumber(data.reach)}</span></div>
+        <div><span className="text-muted-foreground">Freq</span> <span className="font-medium block">{Number(data.frequency).toFixed(2)}</span></div>
+      </div>
     </div>
   );
 }

@@ -14,6 +14,87 @@ export type Database = {
   }
   public: {
     Tables: {
+      ad_breakdown: {
+        Row: {
+          ad_id: string | null
+          ad_name: string | null
+          adset_id: string | null
+          adset_name: string | null
+          campaign_id: string | null
+          campaign_name: string | null
+          clicks: number
+          conversions: number
+          cpc: number
+          cpl: number
+          cpr: number
+          created_at: string
+          ctr: number
+          date: string
+          fifty_percent_views: number
+          frequency: number
+          id: string
+          impressions: number
+          level: string
+          ninety_five_percent_views: number
+          reach: number
+          spend: number
+          status: string | null
+          three_second_views: number
+        }
+        Insert: {
+          ad_id?: string | null
+          ad_name?: string | null
+          adset_id?: string | null
+          adset_name?: string | null
+          campaign_id?: string | null
+          campaign_name?: string | null
+          clicks?: number
+          conversions?: number
+          cpc?: number
+          cpl?: number
+          cpr?: number
+          created_at?: string
+          ctr?: number
+          date: string
+          fifty_percent_views?: number
+          frequency?: number
+          id?: string
+          impressions?: number
+          level: string
+          ninety_five_percent_views?: number
+          reach?: number
+          spend?: number
+          status?: string | null
+          three_second_views?: number
+        }
+        Update: {
+          ad_id?: string | null
+          ad_name?: string | null
+          adset_id?: string | null
+          adset_name?: string | null
+          campaign_id?: string | null
+          campaign_name?: string | null
+          clicks?: number
+          conversions?: number
+          cpc?: number
+          cpl?: number
+          cpr?: number
+          created_at?: string
+          ctr?: number
+          date?: string
+          fifty_percent_views?: number
+          frequency?: number
+          id?: string
+          impressions?: number
+          level?: string
+          ninety_five_percent_views?: number
+          reach?: number
+          spend?: number
+          status?: string | null
+          three_second_views?: number
+        }
+        Relationships: []
+      }
       ad_daily_data: {
         Row: {
           ad_spend: number
