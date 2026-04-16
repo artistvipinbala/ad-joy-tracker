@@ -131,8 +131,17 @@ export default function Dashboard() {
 
 
   // Daily chart data combining ads + sales
-  const dailyChartData = reportAdData.map((d) => {
-    const daySales = reportSalesData.filter((s) => s.date === d.date);
+  // Collect all unique dates from ads, sales, and expenses
+  const allDates = new Set<string>();
+  reportAdData.forEach((d) => allDates.add(d.date));
+  reportSalesData.forEach((s) => allDates.add(s.date));
+  reportExpensesData.forEach((e) => allDates.add(e.date));
+  const sortedDates = Array.from(allDates).sort();
+
+  const dailyChartData = sortedDates.map((dateStr) => {
+    const dayAd = reportAdData.find((d) => d.date === dateStr);
+    const daySales = reportSalesData.filter((s) => s.date === dateStr);
+    const dayExpenses = reportExpensesData.filter((e) => e.date === dateStr);
     const dayRevenue = daySales.reduce((sum, row) => sum + Number(row.total_amount), 0);
     const dayGST = daySales.reduce((sum, row) => sum + Number(row.gst_collected), 0);
     const dayGpayQty = daySales.reduce((sum, row) => sum + (row.gpay_quantity ?? 0), 0);
@@ -143,14 +152,15 @@ export default function Dashboard() {
     const dayUsdInr = daySales.reduce((sum, row) => sum + Number(row.usd_amount_inr ?? 0), 0);
     const dayEurInr = daySales.reduce((sum, row) => sum + Number(row.eur_amount_inr ?? 0), 0);
     const dayCommission = dayPlatformQty * amountPerSale * COMMISSION_RATE + (dayUsdInr + dayEurInr) * COMMISSION_RATE;
-    const daySpend = Number(d.ad_spend);
+    const daySpend = dayAd ? Number(dayAd.ad_spend) : 0;
     const dayAdGst = daySpend * 0.18;
     const daySpendWithGst = daySpend + dayAdGst;
     const dayGstPayable = dayGST - dayAdGst;
-    const dayProfit = dayRevenue - dayCommission - daySpendWithGst - dayGstPayable;
+    const dayExpenseTotal = dayExpenses.reduce((sum, row) => sum + Number(row.amount), 0);
+    const dayProfit = dayRevenue - dayCommission - daySpendWithGst - dayGstPayable - dayExpenseTotal;
 
     return {
-      date: d.date.substring(5), // MM-DD
+      date: dateStr.substring(5), // MM-DD
       spend: daySpendWithGst,
       revenue: dayRevenue,
       profit: dayProfit,
