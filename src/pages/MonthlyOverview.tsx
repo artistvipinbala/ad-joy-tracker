@@ -364,6 +364,7 @@ export default function MonthlyOverview() {
   const monthlyPL = monthlyRows.map((m) => {
     const monthSales = salesData?.filter((s) => s.date.substring(0, 7) === m.month) ?? [];
     const monthExpenses = expensesData?.filter((e) => e.date.substring(0, 7) === m.month) ?? [];
+    const monthAdData = adData?.filter((a) => a.date.substring(0, 7) === m.month) ?? [];
 
     const totalSalesCount = monthSales.reduce((s, r) => s + r.quantity, 0);
     const totalGpayCount = monthSales.reduce((s, r) => s + (r.gpay_quantity ?? 0), 0);
@@ -388,7 +389,7 @@ export default function MonthlyOverview() {
       ...m, totalSalesCount, totalGpayCount, totalUsdCount, totalEurCount, platformCount,
       totalRevenue, totalGST, usdAmountTotal, eurAmountTotal, totalExpenses,
       adGst, spendWithGst, commissionDeduction, gstPayable, netProfit, roas,
-      monthSales, monthExpenses,
+      monthSales, monthExpenses, monthAdData,
     };
   });
 
