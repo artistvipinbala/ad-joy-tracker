@@ -573,11 +573,10 @@ export default function DailyData() {
                     <AdMetric label="Conv" value={String(r.conversions)} />
                   </div>
 
-                  {/* Campaign Breakdown Dropdown */}
+                  {/* Campaign Breakdown Dropdown — hierarchical: Campaign > Ad Sets > Ads */}
                   {(() => {
                     const bd = getBreakdownForDate(r.date);
-                    const hasBreakdown = bd.campaigns.length > 0 || bd.adsets.length > 0 || bd.ads.length > 0;
-                    if (!hasBreakdown) return null;
+                    if (bd.campaigns.length === 0) return null;
                     const isExpanded = expandedDates.has(r.date);
                     return (
                       <Collapsible open={isExpanded} onOpenChange={() => toggleDate(r.date)} className="mt-3">
@@ -588,40 +587,13 @@ export default function DailyData() {
                             {bd.campaigns.length} Campaigns • {bd.adsets.length} Ad Sets • {bd.ads.length} Ads
                           </Button>
                         </CollapsibleTrigger>
-                        <CollapsibleContent className="mt-2 space-y-3">
-                          {/* Campaigns */}
-                          {bd.campaigns.length > 0 && (
-                            <div className="space-y-1.5">
-                              <p className="text-[10px] font-semibold text-muted-foreground flex items-center gap-1">
-                                <Megaphone className="h-3 w-3" /> CAMPAIGNS
-                              </p>
-                              {bd.campaigns.map((c) => (
-                                <BreakdownRow key={c.id} name={c.campaign_name || "Unknown"} data={c} />
-                              ))}
-                            </div>
-                          )}
-                          {/* Ad Sets */}
-                          {bd.adsets.length > 0 && (
-                            <div className="space-y-1.5">
-                              <p className="text-[10px] font-semibold text-muted-foreground flex items-center gap-1">
-                                <Layers className="h-3 w-3" /> AD SETS
-                              </p>
-                              {bd.adsets.map((a) => (
-                                <BreakdownRow key={a.id} name={a.adset_name || "Unknown"} data={a} subtitle={a.campaign_name} />
-                              ))}
-                            </div>
-                          )}
-                          {/* Ads */}
-                          {bd.ads.length > 0 && (
-                            <div className="space-y-1.5">
-                              <p className="text-[10px] font-semibold text-muted-foreground flex items-center gap-1">
-                                <FileImage className="h-3 w-3" /> ADS
-                              </p>
-                              {bd.ads.map((a) => (
-                                <BreakdownRow key={a.id} name={a.ad_name || "Unknown"} data={a} subtitle={a.adset_name} />
-                              ))}
-                            </div>
-                          )}
+                        <CollapsibleContent className="mt-2 space-y-2">
+                          {bd.campaigns.map((campaign) => {
+                            const campaignAdsets = bd.adsets.filter((a) => a.campaign_id === campaign.campaign_id);
+                            return (
+                              <CampaignTree key={campaign.id} campaign={campaign} adsets={campaignAdsets} ads={bd.ads} />
+                            );
+                          })}
                         </CollapsibleContent>
                       </Collapsible>
                     );
