@@ -187,6 +187,33 @@ export default function MonthlyOverview() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const adSpendMutation = useMutation({
+    mutationFn: async (params: { id: string; date: string; ad_spend: number }) => {
+      const { error } = await supabase.from("ad_daily_data").update({ ad_spend: params.ad_spend, is_manual_override: true }).eq("id", params.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ad-data-all"] });
+      queryClient.invalidateQueries({ queryKey: ["ad-daily"] });
+      setAdDialogOpen(false);
+      toast.success("Ad spend updated!");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const deleteAdMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("ad_daily_data").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ad-data-all"] });
+      queryClient.invalidateQueries({ queryKey: ["ad-daily"] });
+      toast.success("Ad entry deleted!");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   // --- Helpers ---
   const fetchExchangeRates = async (date: string) => {
     setFetchingRates(true);
