@@ -12,7 +12,7 @@ import { formatINR, formatNumber, formatPercent } from "@/lib/format";
 import {
   Plus, Pencil, RefreshCw, TrendingUp, TrendingDown, IndianRupee,
   ShoppingCart, DollarSign, Euro, Target, Percent, Wallet, ChevronDown, ChevronRight,
-  Megaphone, Layers, FileImage,
+  Megaphone, Layers, FileImage, Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -292,6 +292,31 @@ export default function DailyData() {
       toast.success("Data saved!");
     },
     onError: (e) => toast.error(e.message),
+  });
+
+  const deleteAdMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("ad_daily_data").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ad-daily"] });
+      queryClient.invalidateQueries({ queryKey: ["ad-data-all"] });
+      toast.success("Ad entry deleted!");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const deleteSalesMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("sales_entries").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sales-all"] });
+      toast.success("Sales entry deleted!");
+    },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const salesMutation = useMutation({
