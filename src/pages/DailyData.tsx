@@ -250,6 +250,28 @@ export default function DailyData() {
     ads: breakdownData?.filter((b) => b.date === date && b.level === "ad") ?? [],
   });
 
+  const adDates = [...(rows?.map((row) => row.date) ?? [])].sort();
+  const salesDates = [...(salesData?.map((row) => row.date) ?? [])].sort();
+
+  const reportStart = adDates.length > 0 && salesDates.length > 0
+    ? (adDates[0] > salesDates[0] ? adDates[0] : salesDates[0])
+    : (adDates[0] ?? salesDates[0] ?? null);
+  const reportEnd = adDates.length > 0 && salesDates.length > 0
+    ? (adDates[adDates.length - 1] < salesDates[salesDates.length - 1] ? adDates[adDates.length - 1] : salesDates[salesDates.length - 1])
+    : (adDates[adDates.length - 1] ?? salesDates[salesDates.length - 1] ?? null);
+
+  const hasReportingRange = Boolean(reportStart && reportEnd && reportStart <= reportEnd);
+
+  const reportRows = hasReportingRange
+    ? (rows?.filter((row) => row.date >= reportStart! && row.date <= reportEnd!) ?? [])
+    : [];
+  const reportSalesData = hasReportingRange
+    ? (salesData?.filter((row) => row.date >= reportStart! && row.date <= reportEnd!) ?? [])
+    : [];
+  const reportExpensesData = hasReportingRange
+    ? (expensesData?.filter((row) => row.date >= reportStart! && row.date <= reportEnd!) ?? [])
+    : [];
+
   useEffect(() => {
     const channel = supabase
       .channel("ad-daily-realtime")
@@ -425,36 +447,33 @@ export default function DailyData() {
     const eurAmountInr = Number(sale?.eur_amount_inr ?? 0);
     const totalRevenue = inrRevenue + usdAmountInr + eurAmountInr;
 
-    // Commission: 2.5% on platform INR sales only (not GPay)
     const commission = platformQty * amountPerSale * COMMISSION_RATE;
-    // Also 2.5% on USD/EUR after conversion
     const usdCommission = usdAmountInr * COMMISSION_RATE;
     const eurCommission = eurAmountInr * COMMISSION_RATE;
     const totalCommission = commission + usdCommission + eurCommission;
 
     const gstCollected = Number(sale?.gst_collected ?? 0);
-    const gstPayable = gstCollected - adGst; // GST collected minus ad GST input credit
+    const gstPayable = gstCollected - adGst;
     const profit = totalRevenue - totalCommission - spendWithGst - expenses - gstPayable;
     const cac = qty > 0 ? spendWithGst / qty : 0;
 
     return { qty, gpay, usdQty, eurQty, totalRevenue, totalCommission, gst: gstCollected, gstPayable, profit, cac, spend: spendWithGst, usdAmountInr, eurAmountInr };
   };
 
-  // Yearly totals
   const yearlyTotals = (() => {
-    const totalSpendRaw = rows?.reduce((s, r) => s + Number(r.ad_spend), 0) ?? 0;
+    const totalSpendRaw = reportRows.reduce((s, r) => s + Number(r.ad_spend), 0);
     const adGst = totalSpendRaw * 0.18;
     const totalSpendWithGst = totalSpendRaw + adGst;
-    const totalSales = salesData?.reduce((s, r) => s + r.quantity, 0) ?? 0;
-    const totalGpay = salesData?.reduce((s, r) => s + (r.gpay_quantity ?? 0), 0) ?? 0;
-    const totalUsd = salesData?.reduce((s, r) => s + (r.usd_quantity ?? 0), 0) ?? 0;
-    const totalEur = salesData?.reduce((s, r) => s + (r.eur_quantity ?? 0), 0) ?? 0;
-    const totalRevenue = salesData?.reduce((s, r) => s + Number(r.total_amount), 0) ?? 0;
-    const totalGST = salesData?.reduce((s, r) => s + Number(r.gst_collected), 0) ?? 0;
-    const totalExpenses = expensesData?.reduce((s, r) => s + Number(r.amount), 0) ?? 0;
+    const totalSales = reportSalesData.reduce((s, r) => s + r.quantity, 0);
+    const totalGpay = reportSalesData.reduce((s, r) => s + (r.gpay_quantity ?? 0), 0);
+    const totalUsd = reportSalesData.reduce((s, r) => s + (r.usd_quantity ?? 0), 0);
+    const totalEur = reportSalesData.reduce((s, r) => s + (r.eur_quantity ?? 0), 0);
+    const totalRevenue = reportSalesData.reduce((s, r) => s + Number(r.total_amount), 0);
+    const totalGST = reportSalesData.reduce((s, r) => s + Number(r.gst_collected), 0);
+    const totalExpenses = reportExpensesData.reduce((s, r) => s + Number(r.amount), 0);
     const platformQty = totalSales - totalGpay - totalUsd - totalEur;
-    const usdAmountTotal = salesData?.reduce((s, r) => s + Number(r.usd_amount_inr ?? 0), 0) ?? 0;
-    const eurAmountTotal = salesData?.reduce((s, r) => s + Number(r.eur_amount_inr ?? 0), 0) ?? 0;
+    const usdAmountTotal = reportSalesData.reduce((s, r) => s + Number(r.usd_amount_inr ?? 0), 0);
+    const eurAmountTotal = reportSalesData.reduce((s, r) => s + Number(r.eur_amount_inr ?? 0), 0);
     const price = Number(productConfig?.price || 499);
     const gstRate = Number(productConfig?.gst_rate_percent || 18) / 100;
     const amountPerSale = price * (1 + gstRate);
