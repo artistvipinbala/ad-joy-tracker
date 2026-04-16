@@ -129,18 +129,6 @@ export default function Dashboard() {
   const netProfit = totalIncome - commissionDeduction - totalSpendWithGst - totalExpenses - gstPayable;
   const roas = totalSpendWithGst > 0 ? totalRevenue / totalSpendWithGst : 0;
 
-  // Monthly summary from ad data
-  const monthlyMap = new Map<string, { spend: number; clicks: number; impressions: number; reach: number }>();
-  adData?.forEach((d) => {
-    const month = d.date.substring(0, 7); // YYYY-MM
-    const existing = monthlyMap.get(month) || { spend: 0, clicks: 0, impressions: 0, reach: 0 };
-    existing.spend += Number(d.ad_spend);
-    existing.clicks += d.clicks;
-    existing.impressions += d.impressions;
-    existing.reach += d.reach;
-    monthlyMap.set(month, existing);
-  });
-  const monthlyData = Array.from(monthlyMap.entries()).map(([month, data]) => ({ month, ...data }));
 
   // Daily chart data combining ads + sales
   const dailyChartData = reportAdData.map((d) => {
@@ -178,44 +166,6 @@ export default function Dashboard() {
         </p>
       </div>
 
-      {/* Monthly Ad Spend Summary */}
-      {monthlyData.length > 0 && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm">Monthly Ad Summary</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left py-2 px-3 text-muted-foreground font-medium">Month</th>
-                    <th className="text-right py-2 px-3 text-muted-foreground font-medium">Ad Spend</th>
-                    <th className="text-right py-2 px-3 text-muted-foreground font-medium">With GST</th>
-                    <th className="text-right py-2 px-3 text-muted-foreground font-medium">Clicks</th>
-                    <th className="text-right py-2 px-3 text-muted-foreground font-medium">Impressions</th>
-                    <th className="text-right py-2 px-3 text-muted-foreground font-medium">Reach</th>
-                    <th className="text-right py-2 px-3 text-muted-foreground font-medium">CPC</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {monthlyData.map((m) => (
-                    <tr key={m.month} className="border-b border-border/50 hover:bg-muted/50">
-                      <td className="py-2 px-3 font-medium">{m.month}</td>
-                      <td className="py-2 px-3 text-right text-destructive font-semibold">{formatINR(m.spend)}</td>
-                      <td className="py-2 px-3 text-right text-destructive">{formatINR(m.spend * 1.18)}</td>
-                      <td className="py-2 px-3 text-right">{m.clicks.toLocaleString("en-IN")}</td>
-                      <td className="py-2 px-3 text-right">{m.impressions.toLocaleString("en-IN")}</td>
-                      <td className="py-2 px-3 text-right">{m.reach.toLocaleString("en-IN")}</td>
-                      <td className="py-2 px-3 text-right">{m.clicks > 0 ? formatINR(m.spend / m.clicks) : "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Key Metrics */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-3">
