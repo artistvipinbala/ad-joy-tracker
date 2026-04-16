@@ -558,6 +558,36 @@ export default function MonthlyOverview() {
                         <TableRow key={`${m.month}-detail`}>
                           <TableCell colSpan={10} className="bg-muted/30 p-4">
                             <div className="space-y-4">
+                              {/* Ad Spend entries for this month */}
+                              <div>
+                                <div className="flex items-center justify-between mb-2">
+                                  <h4 className="text-xs font-bold">📢 Ad Spend Entries</h4>
+                                </div>
+                                {m.monthAdData.length > 0 ? (
+                                  <div className="space-y-1">
+                                    {m.monthAdData.map((ad) => (
+                                      <div key={ad.id} className="flex items-center justify-between bg-background rounded px-3 py-2 text-xs border">
+                                        <div className="flex items-center gap-4">
+                                          <span className="font-medium">{ad.date}</span>
+                                          <span className="text-destructive font-bold">{formatINR(Number(ad.ad_spend))}</span>
+                                          <span className="text-muted-foreground">+18% GST = {formatINR(Number(ad.ad_spend) * 1.18)}</span>
+                                          {ad.is_manual_override && <span className="text-amber-500 text-[10px]">(manual)</span>}
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); openEditAd(ad); }}>
+                                            <Pencil className="h-3 w-3" />
+                                          </Button>
+                                          <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive" onClick={(e) => { e.stopPropagation(); deleteAdMutation.mutate(ad.id); }}>
+                                            <Trash2 className="h-3 w-3" />
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <p className="text-xs text-muted-foreground">No ad spend data for this month</p>
+                                )}
+                              </div>
                               {/* Sales entries for this month */}
                               <div>
                                 <div className="flex items-center justify-between mb-2">
