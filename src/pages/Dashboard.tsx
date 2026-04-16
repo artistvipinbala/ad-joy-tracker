@@ -85,20 +85,47 @@ export default function Dashboard() {
   });
 
   // Calculations
-  const totalSpendRaw = adData?.reduce((s, r) => s + Number(r.ad_spend), 0) ?? 0;
+  const adDates = [...(adData?.map((row) => row.date) ?? [])].sort();
+  const salesDates = [...(salesData?.map((row) => row.date) ?? [])].sort();
+
+  const adStart = adDates.length > 0 ? adDates[0] : null;
+  const adEnd = adDates.length > 0 ? adDates[adDates.length - 1] : null;
+  const salesStart = salesDates.length > 0 ? salesDates[0] : null;
+  const salesEnd = salesDates.length > 0 ? salesDates[salesDates.length - 1] : null;
+
+  const reportStart = adStart && salesStart
+    ? (adStart > salesStart ? adStart : salesStart)
+    : (adStart ?? salesStart);
+  const reportEnd = adEnd && salesEnd
+    ? (adEnd < salesEnd ? adEnd : salesEnd)
+    : (adEnd ?? salesEnd);
+
+  const hasReportingRange = Boolean(reportStart && reportEnd && reportStart <= reportEnd);
+
+  const reportAdData = hasReportingRange
+    ? (adData?.filter((row) => row.date >= reportStart! && row.date <= reportEnd!) ?? [])
+    : [];
+  const reportSalesData = hasReportingRange
+    ? (salesData?.filter((row) => row.date >= reportStart! && row.date <= reportEnd!) ?? [])
+    : [];
+  const reportExpensesData = hasReportingRange
+    ? (expensesData?.filter((row) => row.date >= reportStart! && row.date <= reportEnd!) ?? [])
+    : [];
+
+  const totalSpendRaw = reportAdData.reduce((sum, row) => sum + Number(row.ad_spend), 0);
   const adGst = totalSpendRaw * 0.18;
   const totalSpendWithGst = totalSpendRaw + adGst;
-  const totalSalesCount = salesData?.reduce((s, r) => s + r.quantity, 0) ?? 0;
-  const totalGpayCount = salesData?.reduce((s, r) => s + (r.gpay_quantity ?? 0), 0) ?? 0;
-  const totalUsdCount = salesData?.reduce((s, r) => s + (r.usd_quantity ?? 0), 0) ?? 0;
-  const totalEurCount = salesData?.reduce((s, r) => s + (r.eur_quantity ?? 0), 0) ?? 0;
+  const totalSalesCount = reportSalesData.reduce((sum, row) => sum + row.quantity, 0);
+  const totalGpayCount = reportSalesData.reduce((sum, row) => sum + (row.gpay_quantity ?? 0), 0);
+  const totalUsdCount = reportSalesData.reduce((sum, row) => sum + (row.usd_quantity ?? 0), 0);
+  const totalEurCount = reportSalesData.reduce((sum, row) => sum + (row.eur_quantity ?? 0), 0);
   const platformCount = totalSalesCount - totalGpayCount - totalUsdCount - totalEurCount;
 
-  const totalRevenue = salesData?.reduce((s, r) => s + Number(r.total_amount), 0) ?? 0;
-  const totalGST = salesData?.reduce((s, r) => s + Number(r.gst_collected), 0) ?? 0;
-  const totalExpenses = expensesData?.reduce((s, r) => s + Number(r.amount), 0) ?? 0;
-  const usdAmountTotal = salesData?.reduce((s, r) => s + Number(r.usd_amount_inr ?? 0), 0) ?? 0;
-  const eurAmountTotal = salesData?.reduce((s, r) => s + Number(r.eur_amount_inr ?? 0), 0) ?? 0;
+  const totalRevenue = reportSalesData.reduce((sum, row) => sum + Number(row.total_amount), 0);
+  const totalGST = reportSalesData.reduce((sum, row) => sum + Number(row.gst_collected), 0);
+  const totalExpenses = reportExpensesData.reduce((sum, row) => sum + Number(row.amount), 0);
+  const usdAmountTotal = reportSalesData.reduce((sum, row) => sum + Number(row.usd_amount_inr ?? 0), 0);
+  const eurAmountTotal = reportSalesData.reduce((sum, row) => sum + Number(row.eur_amount_inr ?? 0), 0);
 
   const price = Number(productConfig?.price || 499);
   const gstRate = Number(productConfig?.gst_rate_percent || 18) / 100;
@@ -123,17 +150,17 @@ export default function Dashboard() {
   const monthlyData = Array.from(monthlyMap.entries()).map(([month, data]) => ({ month, ...data }));
 
   // Daily chart data combining ads + sales
-  const dailyChartData = adData?.map((d) => {
-    const daySales = salesData?.filter((s) => s.date === d.date) ?? [];
-    const dayRevenue = daySales.reduce((s, r) => s + Number(r.total_amount), 0);
-    const dayGST = daySales.reduce((s, r) => s + Number(r.gst_collected), 0);
-    const dayGpayQty = daySales.reduce((s, r) => s + (r.gpay_quantity ?? 0), 0);
-    const dayUsdQty = daySales.reduce((s, r) => s + (r.usd_quantity ?? 0), 0);
-    const dayEurQty = daySales.reduce((s, r) => s + (r.eur_quantity ?? 0), 0);
-    const daySalesQty = daySales.reduce((s, r) => s + r.quantity, 0);
+  const dailyChartData = reportAdData.map((d) => {
+    const daySales = reportSalesData.filter((s) => s.date === d.date);
+    const dayRevenue = daySales.reduce((sum, row) => sum + Number(row.total_amount), 0);
+    const dayGST = daySales.reduce((sum, row) => sum + Number(row.gst_collected), 0);
+    const dayGpayQty = daySales.reduce((sum, row) => sum + (row.gpay_quantity ?? 0), 0);
+    const dayUsdQty = daySales.reduce((sum, row) => sum + (row.usd_quantity ?? 0), 0);
+    const dayEurQty = daySales.reduce((sum, row) => sum + (row.eur_quantity ?? 0), 0);
+    const daySalesQty = daySales.reduce((sum, row) => sum + row.quantity, 0);
     const dayPlatformQty = daySalesQty - dayGpayQty - dayUsdQty - dayEurQty;
-    const dayUsdInr = daySales.reduce((s, r) => s + Number(r.usd_amount_inr ?? 0), 0);
-    const dayEurInr = daySales.reduce((s, r) => s + Number(r.eur_amount_inr ?? 0), 0);
+    const dayUsdInr = daySales.reduce((sum, row) => sum + Number(row.usd_amount_inr ?? 0), 0);
+    const dayEurInr = daySales.reduce((sum, row) => sum + Number(row.eur_amount_inr ?? 0), 0);
     const dayCommission = dayPlatformQty * amountPerSale * COMMISSION_RATE + (dayUsdInr + dayEurInr) * COMMISSION_RATE;
     const daySpend = Number(d.ad_spend);
     const dayAdGst = daySpend * 0.18;
@@ -147,13 +174,15 @@ export default function Dashboard() {
       revenue: dayRevenue,
       profit: dayProfit,
     };
-  }) ?? [];
+  });
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-        <p className="text-muted-foreground text-sm">Overview of your ad performance & profit</p>
+        <p className="text-muted-foreground text-sm">
+          Overview of your ad performance & profit{hasReportingRange ? ` • ${reportStart} to ${reportEnd}` : ""}
+        </p>
       </div>
 
       {/* Monthly Ad Spend Summary */}
@@ -377,7 +406,7 @@ export default function Dashboard() {
       )}
 
       {/* Daily Data Table */}
-      {adData && adData.length > 0 && (
+      {reportAdData.length > 0 && (
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">Day-by-Day Breakdown</CardTitle>
@@ -393,7 +422,7 @@ export default function Dashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {adData.map((d) => (
+                  {reportAdData.map((d) => (
                     <tr key={d.id} className="border-b border-border/30 hover:bg-muted/30">
                       <td className="py-1.5 px-2 font-medium">{d.date}</td>
                       <td className="py-1.5 px-2 text-right text-destructive">{formatINR(Number(d.ad_spend))}</td>
@@ -412,7 +441,7 @@ export default function Dashboard() {
         </Card>
       )}
 
-      {(!adData || adData.length === 0) && (
+      {reportAdData.length === 0 && (
         <Card className="border-dashed">
           <CardContent className="py-10 text-center">
             <p className="text-muted-foreground">
