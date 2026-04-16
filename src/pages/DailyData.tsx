@@ -28,6 +28,28 @@ const defaultRow = {
 
 type AdRow = typeof defaultRow;
 
+function BreakdownRow({ name, data, subtitle }: { name: string; data: any; subtitle?: string | null }) {
+  return (
+    <div className="bg-muted/30 rounded-lg px-3 py-2 border border-border/50">
+      <div className="flex items-center justify-between mb-1">
+        <div>
+          <p className="text-xs font-medium truncate max-w-[200px]">{name}</p>
+          {subtitle && <p className="text-[9px] text-muted-foreground truncate max-w-[200px]">{subtitle}</p>}
+        </div>
+        <span className="text-xs font-bold text-destructive">{formatINR(Number(data.spend))}</span>
+      </div>
+      <div className="grid grid-cols-4 md:grid-cols-6 gap-x-3 gap-y-1 text-[10px]">
+        <div><span className="text-muted-foreground">Clicks</span> <span className="font-medium block">{data.clicks}</span></div>
+        <div><span className="text-muted-foreground">CTR</span> <span className="font-medium block">{formatPercent(Number(data.ctr))}</span></div>
+        <div><span className="text-muted-foreground">CPC</span> <span className="font-medium block">{formatINR(Number(data.cpc))}</span></div>
+        <div><span className="text-muted-foreground">CPR</span> <span className="font-medium block">{Number(data.cpr) > 0 ? formatINR(Number(data.cpr)) : "—"}</span></div>
+        <div><span className="text-muted-foreground">Reach</span> <span className="font-medium block">{formatNumber(data.reach)}</span></div>
+        <div><span className="text-muted-foreground">Freq</span> <span className="font-medium block">{Number(data.frequency).toFixed(2)}</span></div>
+      </div>
+    </div>
+  );
+}
+
 export default function DailyData() {
   const queryClient = useQueryClient();
   const [editRow, setEditRow] = useState<AdRow | null>(null);
@@ -663,24 +685,3 @@ function AdMetric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function BreakdownRow({ name, data, subtitle }: { name: string; data: any; subtitle?: string | null }) {
-  return (
-    <div className="bg-muted/30 rounded-lg px-3 py-2 border border-border/50">
-      <div className="flex items-center justify-between mb-1">
-        <div>
-          <p className="text-xs font-medium truncate max-w-[200px]">{name}</p>
-          {subtitle && <p className="text-[9px] text-muted-foreground truncate max-w-[200px]">{subtitle}</p>}
-        </div>
-        <span className="text-xs font-bold text-destructive">{formatINR(Number(data.spend))}</span>
-      </div>
-      <div className="grid grid-cols-4 md:grid-cols-6 gap-x-3 gap-y-1 text-[10px]">
-        <div><span className="text-muted-foreground">Clicks</span> <span className="font-medium block">{data.clicks}</span></div>
-        <div><span className="text-muted-foreground">CTR</span> <span className="font-medium block">{formatPercent(Number(data.ctr))}</span></div>
-        <div><span className="text-muted-foreground">CPC</span> <span className="font-medium block">{formatINR(Number(data.cpc))}</span></div>
-        <div><span className="text-muted-foreground">CPR</span> <span className="font-medium block">{Number(data.cpr) > 0 ? formatINR(Number(data.cpr)) : "—"}</span></div>
-        <div><span className="text-muted-foreground">Reach</span> <span className="font-medium block">{formatNumber(data.reach)}</span></div>
-        <div><span className="text-muted-foreground">Freq</span> <span className="font-medium block">{Number(data.frequency).toFixed(2)}</span></div>
-      </div>
-    </div>
-  );
-}
