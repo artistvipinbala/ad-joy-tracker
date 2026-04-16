@@ -12,6 +12,7 @@ import {
 } from "recharts";
 import { TrendingUp, TrendingDown, IndianRupee, ShoppingCart, Target, Percent, Wallet, CreditCard } from "lucide-react";
 import { toast } from "sonner";
+import ProfitBreakdown from "@/components/ProfitBreakdown";
 
 const COMMISSION_RATE = 0.025; // 2.5%
 
@@ -317,6 +318,30 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Step-by-Step Profit Breakdown */}
+      <ProfitBreakdown
+        totalRevenue={totalRevenue}
+        totalSalesCount={totalSalesCount}
+        totalGpayCount={totalGpayCount}
+        totalUsdCount={totalUsdCount}
+        totalEurCount={totalEurCount}
+        platformCount={platformCount}
+        amountPerSale={amountPerSale}
+        usdAmountTotal={usdAmountTotal}
+        eurAmountTotal={eurAmountTotal}
+        commissionDeduction={commissionDeduction}
+        totalSpendRaw={totalSpendRaw}
+        adGst={adGst}
+        totalSpendWithGst={totalSpendWithGst}
+        totalGST={totalGST}
+        gstPayable={gstPayable}
+        totalExpenses={totalExpenses}
+        netProfit={netProfit}
+        price={price}
+        gstRate={gstRate}
+        commissionRate={COMMISSION_RATE}
+      />
 
       {/* Edit Sales Dialog */}
       <Dialog open={salesDialogOpen} onOpenChange={setSalesDialogOpen}>
