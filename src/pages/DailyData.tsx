@@ -56,13 +56,17 @@ export default function DailyData() {
   const handleSync = async () => {
     setSyncing(true);
     try {
+      // Sync last 30 days to catch all missing data
       const now = new Date();
       const today = new Date(now.getTime() - now.getTimezoneOffset() * 60_000)
         .toISOString()
         .split("T")[0];
+      const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000 - now.getTimezoneOffset() * 60_000)
+        .toISOString()
+        .split("T")[0];
 
       const { data, error } = await supabase.functions.invoke("sync-facebook-ads", {
-        body: { since: today, until: today },
+        body: { since: monthAgo, until: today },
       });
 
       if (error) throw error;
@@ -70,12 +74,13 @@ export default function DailyData() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["ad-daily"] }),
         queryClient.invalidateQueries({ queryKey: ["ad-data-all"] }),
+        queryClient.invalidateQueries({ queryKey: ["ad-breakdown"] }),
       ]);
 
-      if (data?.synced > 0) {
-        toast.success("ഇന്നത്തെ FB Ads data sync ആയി!");
+      if (data?.synced > 0 || data?.breakdown_synced > 0) {
+        toast.success(`Synced! Account: ${data.synced} days, Campaigns: ${data.breakdown_synced} entries`);
       } else {
-        toast.info(data?.message || "ഇന്നത്തേക്കുള്ള data ഇല്ല");
+        toast.info(data?.message || "No new data found");
       }
     } catch (e: any) {
       toast.error(e.message || "Sync failed");
