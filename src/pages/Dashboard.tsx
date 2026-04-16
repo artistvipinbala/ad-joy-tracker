@@ -13,7 +13,6 @@ import {
 import { TrendingUp, TrendingDown, IndianRupee, ShoppingCart, Target, Percent, Wallet, CreditCard } from "lucide-react";
 import { toast } from "sonner";
 
-const PRICE_PER_SALE = 589;
 const COMMISSION_RATE = 0.025; // 2.5%
 
 export default function Dashboard() {
@@ -126,18 +125,25 @@ export default function Dashboard() {
   // Daily chart data combining ads + sales
   const dailyChartData = adData?.map((d) => {
     const daySales = salesData?.filter((s) => s.date === d.date) ?? [];
-    const daySalesQty = daySales.reduce((s, r) => s + r.quantity, 0);
-    const dayGpayQty = daySales.reduce((s, r) => s + (r.gpay_quantity ?? 0), 0);
-    const dayPlatformQty = daySalesQty - dayGpayQty;
-    const dayRevenue = daySalesQty * PRICE_PER_SALE;
-    const dayCommission = dayPlatformQty * PRICE_PER_SALE * COMMISSION_RATE;
+    const dayRevenue = daySales.reduce((s, r) => s + Number(r.total_amount), 0);
     const dayGST = daySales.reduce((s, r) => s + Number(r.gst_collected), 0);
+    const dayGpayQty = daySales.reduce((s, r) => s + (r.gpay_quantity ?? 0), 0);
+    const dayUsdQty = daySales.reduce((s, r) => s + (r.usd_quantity ?? 0), 0);
+    const dayEurQty = daySales.reduce((s, r) => s + (r.eur_quantity ?? 0), 0);
+    const daySalesQty = daySales.reduce((s, r) => s + r.quantity, 0);
+    const dayPlatformQty = daySalesQty - dayGpayQty - dayUsdQty - dayEurQty;
+    const dayUsdInr = daySales.reduce((s, r) => s + Number(r.usd_amount_inr ?? 0), 0);
+    const dayEurInr = daySales.reduce((s, r) => s + Number(r.eur_amount_inr ?? 0), 0);
+    const dayCommission = dayPlatformQty * amountPerSale * COMMISSION_RATE + (dayUsdInr + dayEurInr) * COMMISSION_RATE;
     const daySpend = Number(d.ad_spend);
-    const dayProfit = dayRevenue - dayCommission - daySpend - dayGST;
+    const dayAdGst = daySpend * 0.18;
+    const daySpendWithGst = daySpend + dayAdGst;
+    const dayGstPayable = dayGST - dayAdGst;
+    const dayProfit = dayRevenue - dayCommission - daySpendWithGst - dayGstPayable;
 
     return {
       date: d.date.substring(5), // MM-DD
-      spend: daySpend,
+      spend: daySpendWithGst,
       revenue: dayRevenue,
       profit: dayProfit,
     };
@@ -315,11 +321,11 @@ export default function Dashboard() {
               <div className="bg-muted/50 rounded-md p-3 text-xs space-y-1">
                 <div className="flex justify-between">
                   <span>Total Revenue</span>
-                  <span className="font-semibold">{formatINR(Number(editTotal) * PRICE_PER_SALE)}</span>
+                  <span className="font-semibold">{formatINR(Number(editTotal) * amountPerSale)}</span>
                 </div>
                 <div className="flex justify-between text-muted-foreground">
                   <span>Platform ({Number(editTotal) - Number(editGpay || 0)}) × 2.5%</span>
-                  <span>-{formatINR((Number(editTotal) - Number(editGpay || 0)) * PRICE_PER_SALE * COMMISSION_RATE)}</span>
+                  <span>-{formatINR((Number(editTotal) - Number(editGpay || 0)) * amountPerSale * COMMISSION_RATE)}</span>
                 </div>
                 <div className="flex justify-between text-muted-foreground">
                   <span>GPay ({Number(editGpay || 0)}) — no commission</span>
