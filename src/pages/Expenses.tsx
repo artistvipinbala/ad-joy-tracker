@@ -8,23 +8,19 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
 import { formatINR } from "@/lib/format";
-import { Plus } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Expenses() {
   const queryClient = useQueryClient();
 
-  // Sales form state
   const [saleDate, setSaleDate] = useState(new Date().toISOString().split("T")[0]);
   const [saleQty, setSaleQty] = useState(1);
   const [saleAmount, setSaleAmount] = useState(0);
   const [saleGST, setSaleGST] = useState(0);
   const [saleNotes, setSaleNotes] = useState("");
 
-  // Expense form state
   const [expDate, setExpDate] = useState(new Date().toISOString().split("T")[0]);
   const [expAmount, setExpAmount] = useState(0);
   const [expCatId, setExpCatId] = useState("");
@@ -57,12 +53,8 @@ export default function Expenses() {
   const addSale = useMutation({
     mutationFn: async () => {
       const { error } = await supabase.from("sales_entries").insert({
-        date: saleDate,
-        quantity: saleQty,
-        amount_per_sale: saleAmount,
-        total_amount: saleQty * saleAmount,
-        gst_collected: saleGST,
-        notes: saleNotes || null,
+        date: saleDate, quantity: saleQty, amount_per_sale: saleAmount,
+        total_amount: saleQty * saleAmount, gst_collected: saleGST, notes: saleNotes || null,
       });
       if (error) throw error;
     },
@@ -77,10 +69,7 @@ export default function Expenses() {
   const addExpense = useMutation({
     mutationFn: async () => {
       const { error } = await supabase.from("expenses").insert({
-        date: expDate,
-        category_id: expCatId || null,
-        amount: expAmount,
-        description: expDesc || null,
+        date: expDate, category_id: expCatId || null, amount: expAmount, description: expDesc || null,
       });
       if (error) throw error;
     },
@@ -90,6 +79,30 @@ export default function Expenses() {
       toast.success("Expense added!");
     },
     onError: (e) => toast.error(e.message),
+  });
+
+  const deleteExpense = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("expenses").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["expenses-all"] });
+      toast.success("Expense deleted!");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const deleteSale = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("sales_entries").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sales-all"] });
+      toast.success("Sale deleted!");
+    },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   return (
@@ -107,9 +120,7 @@ export default function Expenses() {
 
         <TabsContent value="sales" className="space-y-4">
           <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">Add Sale Entry</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle className="text-sm">Add Sale Entry</CardTitle></CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 <div className="space-y-1">
@@ -150,6 +161,7 @@ export default function Expenses() {
                     <TableHead>Total</TableHead>
                     <TableHead>GST</TableHead>
                     <TableHead>Notes</TableHead>
+                    <TableHead className="w-10"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -161,9 +173,15 @@ export default function Expenses() {
                       <TableCell className="font-medium">{formatINR(Number(s.total_amount))}</TableCell>
                       <TableCell>{formatINR(Number(s.gst_collected))}</TableCell>
                       <TableCell className="text-muted-foreground text-xs">{s.notes || "-"}</TableCell>
+                      <TableCell>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"
+                          onClick={() => { if (confirm("Delete this sale?")) deleteSale.mutate(s.id); }}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   )) : (
-                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No sales yet</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No sales yet</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>
@@ -173,9 +191,7 @@ export default function Expenses() {
 
         <TabsContent value="expenses" className="space-y-4">
           <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">Add Expense</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle className="text-sm">Add Expense</CardTitle></CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="space-y-1">
@@ -217,6 +233,7 @@ export default function Expenses() {
                     <TableHead>Category</TableHead>
                     <TableHead>Amount</TableHead>
                     <TableHead>Description</TableHead>
+                    <TableHead className="w-10"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -226,9 +243,15 @@ export default function Expenses() {
                       <TableCell>{(e as any).expense_categories?.name ?? "-"}</TableCell>
                       <TableCell className="font-medium">{formatINR(Number(e.amount))}</TableCell>
                       <TableCell className="text-muted-foreground text-xs">{e.description || "-"}</TableCell>
+                      <TableCell>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"
+                          onClick={() => { if (confirm("Delete this expense?")) deleteExpense.mutate(e.id); }}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   )) : (
-                    <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">No expenses yet</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No expenses yet</TableCell></TableRow>
                   )}
                 </TableBody>
               </Table>
