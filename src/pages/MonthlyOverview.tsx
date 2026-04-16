@@ -41,6 +41,12 @@ export default function MonthlyOverview() {
   const [expenseDesc, setExpenseDesc] = useState("");
   const [editExpenseId, setEditExpenseId] = useState<string | null>(null);
 
+  // Ad spend dialog state
+  const [adDialogOpen, setAdDialogOpen] = useState(false);
+  const [adEditId, setAdEditId] = useState<string | null>(null);
+  const [adDate, setAdDate] = useState("");
+  const [adSpend, setAdSpend] = useState("");
+
   const { data: productConfig } = useQuery({
     queryKey: ["product-config"],
     queryFn: async () => {
@@ -181,6 +187,33 @@ export default function MonthlyOverview() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const adSpendMutation = useMutation({
+    mutationFn: async (params: { id: string; date: string; ad_spend: number }) => {
+      const { error } = await supabase.from("ad_daily_data").update({ ad_spend: params.ad_spend, is_manual_override: true }).eq("id", params.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ad-data-all"] });
+      queryClient.invalidateQueries({ queryKey: ["ad-daily"] });
+      setAdDialogOpen(false);
+      toast.success("Ad spend updated!");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const deleteAdMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("ad_daily_data").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ad-data-all"] });
+      queryClient.invalidateQueries({ queryKey: ["ad-daily"] });
+      toast.success("Ad entry deleted!");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   // --- Helpers ---
   const fetchExchangeRates = async (date: string) => {
     setFetchingRates(true);
@@ -231,6 +264,19 @@ export default function MonthlyOverview() {
     setExpenseDesc(entry.description ?? "");
     setEditExpenseId(entry.id);
     setExpenseDialogOpen(true);
+  };
+
+  const openEditAd = (entry: any) => {
+    setAdEditId(entry.id);
+    setAdDate(entry.date);
+    setAdSpend(String(entry.ad_spend));
+    setAdDialogOpen(true);
+  };
+
+  const handleSaveAd = () => {
+    const spend = Number(adSpend);
+    if (spend < 0 || !adEditId) { toast.error("Invalid ad spend value"); return; }
+    adSpendMutation.mutate({ id: adEditId, date: adDate, ad_spend: spend });
   };
 
   const handleSaveSales = () => {
@@ -318,6 +364,7 @@ export default function MonthlyOverview() {
   const monthlyPL = monthlyRows.map((m) => {
     const monthSales = salesData?.filter((s) => s.date.substring(0, 7) === m.month) ?? [];
     const monthExpenses = expensesData?.filter((e) => e.date.substring(0, 7) === m.month) ?? [];
+    const monthAdData = adData?.filter((a) => a.date.substring(0, 7) === m.month) ?? [];
 
     const totalSalesCount = monthSales.reduce((s, r) => s + r.quantity, 0);
     const totalGpayCount = monthSales.reduce((s, r) => s + (r.gpay_quantity ?? 0), 0);
@@ -342,7 +389,7 @@ export default function MonthlyOverview() {
       ...m, totalSalesCount, totalGpayCount, totalUsdCount, totalEurCount, platformCount,
       totalRevenue, totalGST, usdAmountTotal, eurAmountTotal, totalExpenses,
       adGst, spendWithGst, commissionDeduction, gstPayable, netProfit, roas,
-      monthSales, monthExpenses,
+      monthSales, monthExpenses, monthAdData,
     };
   });
 
@@ -511,6 +558,36 @@ export default function MonthlyOverview() {
                         <TableRow key={`${m.month}-detail`}>
                           <TableCell colSpan={10} className="bg-muted/30 p-4">
                             <div className="space-y-4">
+                              {/* Ad Spend entries for this month */}
+                              <div>
+                                <div className="flex items-center justify-between mb-2">
+                                  <h4 className="text-xs font-bold">📢 Ad Spend Entries</h4>
+                                </div>
+                                {m.monthAdData.length > 0 ? (
+                                  <div className="space-y-1">
+                                    {m.monthAdData.map((ad) => (
+                                      <div key={ad.id} className="flex items-center justify-between bg-background rounded px-3 py-2 text-xs border">
+                                        <div className="flex items-center gap-4">
+                                          <span className="font-medium">{ad.date}</span>
+                                          <span className="text-destructive font-bold">{formatINR(Number(ad.ad_spend))}</span>
+                                          <span className="text-muted-foreground">+18% GST = {formatINR(Number(ad.ad_spend) * 1.18)}</span>
+                                          {ad.is_manual_override && <span className="text-amber-500 text-[10px]">(manual)</span>}
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); openEditAd(ad); }}>
+                                            <Pencil className="h-3 w-3" />
+                                          </Button>
+                                          <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive" onClick={(e) => { e.stopPropagation(); deleteAdMutation.mutate(ad.id); }}>
+                                            <Trash2 className="h-3 w-3" />
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <p className="text-xs text-muted-foreground">No ad spend data for this month</p>
+                                )}
+                              </div>
                               {/* Sales entries for this month */}
                               <div>
                                 <div className="flex items-center justify-between mb-2">
@@ -713,6 +790,29 @@ export default function MonthlyOverview() {
             </div>
             <Button onClick={handleSaveExpense} className="w-full" disabled={expenseMutation.isPending}>
               {expenseMutation.isPending ? "Saving..." : "Save Expense"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Ad Spend Edit Dialog */}
+      <Dialog open={adDialogOpen} onOpenChange={setAdDialogOpen}>
+        <DialogContent className="max-w-sm" onClick={(e) => e.stopPropagation()}>
+          <DialogHeader>
+            <DialogTitle>Edit Ad Spend</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Date</Label>
+              <Input type="date" value={adDate} disabled />
+            </div>
+            <div>
+              <Label>Ad Spend (₹) — excl. GST</Label>
+              <Input type="number" value={adSpend} onChange={(e) => setAdSpend(e.target.value)} placeholder="0" />
+            </div>
+            <p className="text-xs text-muted-foreground">With 18% GST: {formatINR(Number(adSpend || 0) * 1.18)}</p>
+            <Button onClick={handleSaveAd} className="w-full" disabled={adSpendMutation.isPending}>
+              {adSpendMutation.isPending ? "Saving..." : "Save Ad Spend"}
             </Button>
           </div>
         </DialogContent>
