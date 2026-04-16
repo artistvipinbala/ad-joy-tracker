@@ -50,6 +50,92 @@ function BreakdownRow({ name, data, subtitle }: { name: string; data: any; subti
   );
 }
 
+function CampaignTree({ campaign, adsets, ads }: { campaign: any; adsets: any[]; ads: any[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Collapsible open={open} onOpenChange={setOpen} className="border border-border rounded-lg overflow-hidden">
+      <CollapsibleTrigger asChild>
+        <button className="w-full flex items-center gap-2 px-3 py-2 bg-muted/50 hover:bg-muted/80 transition-colors text-left">
+          {open ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronRight className="h-3 w-3 shrink-0" />}
+          <Megaphone className="h-3 w-3 shrink-0 text-primary" />
+          <span className="text-xs font-semibold truncate flex-1">{campaign.campaign_name || "Unknown Campaign"}</span>
+          <span className="text-xs font-bold text-destructive shrink-0">{formatINR(Number(campaign.spend))}</span>
+        </button>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="px-3 py-2 space-y-1.5 border-t border-border/50">
+          {/* Campaign metrics */}
+          <div className="grid grid-cols-4 md:grid-cols-6 gap-x-3 gap-y-1 text-[10px] mb-2">
+            <div><span className="text-muted-foreground">Clicks</span> <span className="font-medium block">{campaign.clicks}</span></div>
+            <div><span className="text-muted-foreground">CTR</span> <span className="font-medium block">{formatPercent(Number(campaign.ctr))}</span></div>
+            <div><span className="text-muted-foreground">CPC</span> <span className="font-medium block">{formatINR(Number(campaign.cpc))}</span></div>
+            <div><span className="text-muted-foreground">CPR</span> <span className="font-medium block">{Number(campaign.cpr) > 0 ? formatINR(Number(campaign.cpr)) : "—"}</span></div>
+            <div><span className="text-muted-foreground">Reach</span> <span className="font-medium block">{formatNumber(campaign.reach)}</span></div>
+            <div><span className="text-muted-foreground">Freq</span> <span className="font-medium block">{Number(campaign.frequency).toFixed(2)}</span></div>
+          </div>
+          {/* Ad Sets under this campaign */}
+          {adsets.length > 0 && adsets.map((adset) => (
+            <AdSetTree key={adset.id} adset={adset} ads={ads.filter((a) => a.adset_id === adset.adset_id)} />
+          ))}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+function AdSetTree({ adset, ads }: { adset: any; ads: any[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Collapsible open={open} onOpenChange={setOpen} className="ml-3 border-l-2 border-primary/20 pl-2">
+      <CollapsibleTrigger asChild>
+        <button className="w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted/60 transition-colors text-left">
+          {open ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronRight className="h-3 w-3 shrink-0" />}
+          <Layers className="h-3 w-3 shrink-0 text-amber-500" />
+          <span className="text-[11px] font-medium truncate flex-1">{adset.adset_name || "Unknown Ad Set"}</span>
+          <span className="text-[11px] font-bold text-destructive shrink-0">{formatINR(Number(adset.spend))}</span>
+        </button>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="pl-4 py-1 space-y-1.5">
+          {/* Ad Set metrics */}
+          <div className="grid grid-cols-4 md:grid-cols-6 gap-x-3 gap-y-1 text-[10px] mb-1">
+            <div><span className="text-muted-foreground">Clicks</span> <span className="font-medium block">{adset.clicks}</span></div>
+            <div><span className="text-muted-foreground">CTR</span> <span className="font-medium block">{formatPercent(Number(adset.ctr))}</span></div>
+            <div><span className="text-muted-foreground">CPC</span> <span className="font-medium block">{formatINR(Number(adset.cpc))}</span></div>
+            <div><span className="text-muted-foreground">CPR</span> <span className="font-medium block">{Number(adset.cpr) > 0 ? formatINR(Number(adset.cpr)) : "—"}</span></div>
+            <div><span className="text-muted-foreground">Reach</span> <span className="font-medium block">{formatNumber(adset.reach)}</span></div>
+            <div><span className="text-muted-foreground">Freq</span> <span className="font-medium block">{Number(adset.frequency).toFixed(2)}</span></div>
+          </div>
+          {/* Ads under this ad set */}
+          {ads.length > 0 && (
+            <div className="space-y-1">
+              {ads.map((ad) => (
+                <div key={ad.id} className="flex items-start gap-2 ml-2 border-l border-muted-foreground/20 pl-2 py-1">
+                  <FileImage className="h-3 w-3 shrink-0 text-muted-foreground mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[11px] font-medium truncate">{ad.ad_name || "Unknown Ad"}</p>
+                      <span className="text-[10px] font-bold text-destructive shrink-0 ml-2">{formatINR(Number(ad.spend))}</span>
+                    </div>
+                    <div className="grid grid-cols-4 md:grid-cols-6 gap-x-3 text-[10px] mt-0.5">
+                      <div><span className="text-muted-foreground">Clicks</span> <span className="font-medium block">{ad.clicks}</span></div>
+                      <div><span className="text-muted-foreground">CTR</span> <span className="font-medium block">{formatPercent(Number(ad.ctr))}</span></div>
+                      <div><span className="text-muted-foreground">CPC</span> <span className="font-medium block">{formatINR(Number(ad.cpc))}</span></div>
+                      <div><span className="text-muted-foreground">CPR</span> <span className="font-medium block">{Number(ad.cpr) > 0 ? formatINR(Number(ad.cpr)) : "—"}</span></div>
+                      <div><span className="text-muted-foreground">Reach</span> <span className="font-medium block">{formatNumber(ad.reach)}</span></div>
+                      <div><span className="text-muted-foreground">Freq</span> <span className="font-medium block">{Number(ad.frequency).toFixed(2)}</span></div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
 export default function DailyData() {
   const queryClient = useQueryClient();
   const [editRow, setEditRow] = useState<AdRow | null>(null);
