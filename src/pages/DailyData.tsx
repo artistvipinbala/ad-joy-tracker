@@ -663,6 +663,18 @@ export default function DailyData() {
                     >
                       <Pencil className="h-3 w-3" />
                     </Button>
+                    <Button
+                      variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"
+                      onClick={() => {
+                        if (confirm(`Delete ad data for ${r.date}?`)) {
+                          deleteAdMutation.mutate(r.id);
+                          const saleEntry = getSalesForDate(r.date);
+                          if (saleEntry) deleteSalesMutation.mutate(saleEntry.id);
+                        }
+                      }}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
                   </div>
                 </div>
 
