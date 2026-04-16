@@ -85,23 +85,15 @@ export default function Dashboard() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  // Calculations
-  const adDates = [...(adData?.map((row) => row.date) ?? [])].sort();
-  const salesDates = [...(salesData?.map((row) => row.date) ?? [])].sort();
+  // Current month filter
+  const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const currentMonthStart = `${currentMonth}-01`;
+  const currentMonthEnd = `${currentMonth}-31`;
 
-  const adStart = adDates.length > 0 ? adDates[0] : null;
-  const adEnd = adDates.length > 0 ? adDates[adDates.length - 1] : null;
-  const salesStart = salesDates.length > 0 ? salesDates[0] : null;
-  const salesEnd = salesDates.length > 0 ? salesDates[salesDates.length - 1] : null;
-
-  const reportStart = adStart && salesStart
-    ? (adStart > salesStart ? adStart : salesStart)
-    : (adStart ?? salesStart);
-  const reportEnd = adEnd && salesEnd
-    ? (adEnd < salesEnd ? adEnd : salesEnd)
-    : (adEnd ?? salesEnd);
-
-  const hasReportingRange = Boolean(reportStart && reportEnd && reportStart <= reportEnd);
+  const reportStart = currentMonthStart;
+  const reportEnd = currentMonthEnd;
+  const hasReportingRange = true;
 
   const reportAdData = hasReportingRange
     ? (adData?.filter((row) => row.date >= reportStart! && row.date <= reportEnd!) ?? [])
@@ -182,7 +174,7 @@ export default function Dashboard() {
       <div>
         <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
         <p className="text-muted-foreground text-sm">
-          Overview of your ad performance & profit{hasReportingRange ? ` • ${reportStart} to ${reportEnd}` : ""}
+          Overview of your ad performance & profit • {currentMonth} (Current Month)
         </p>
       </div>
 

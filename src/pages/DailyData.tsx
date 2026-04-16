@@ -250,27 +250,15 @@ export default function DailyData() {
     ads: breakdownData?.filter((b) => b.date === date && b.level === "ad") ?? [],
   });
 
-  const adDates = [...(rows?.map((row) => row.date) ?? [])].sort();
-  const salesDates = [...(salesData?.map((row) => row.date) ?? [])].sort();
+  // Current month filter
+  const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const currentMonthStart = `${currentMonth}-01`;
+  const currentMonthEnd = `${currentMonth}-31`;
 
-  const reportStart = adDates.length > 0 && salesDates.length > 0
-    ? (adDates[0] > salesDates[0] ? adDates[0] : salesDates[0])
-    : (adDates[0] ?? salesDates[0] ?? null);
-  const reportEnd = adDates.length > 0 && salesDates.length > 0
-    ? (adDates[adDates.length - 1] < salesDates[salesDates.length - 1] ? adDates[adDates.length - 1] : salesDates[salesDates.length - 1])
-    : (adDates[adDates.length - 1] ?? salesDates[salesDates.length - 1] ?? null);
-
-  const hasReportingRange = Boolean(reportStart && reportEnd && reportStart <= reportEnd);
-
-  const reportRows = hasReportingRange
-    ? (rows?.filter((row) => row.date >= reportStart! && row.date <= reportEnd!) ?? [])
-    : [];
-  const reportSalesData = hasReportingRange
-    ? (salesData?.filter((row) => row.date >= reportStart! && row.date <= reportEnd!) ?? [])
-    : [];
-  const reportExpensesData = hasReportingRange
-    ? (expensesData?.filter((row) => row.date >= reportStart! && row.date <= reportEnd!) ?? [])
-    : [];
+  const reportRows = rows?.filter((row) => row.date >= currentMonthStart && row.date <= currentMonthEnd) ?? [];
+  const reportSalesData = salesData?.filter((row) => row.date >= currentMonthStart && row.date <= currentMonthEnd) ?? [];
+  const reportExpensesData = expensesData?.filter((row) => row.date >= currentMonthStart && row.date <= currentMonthEnd) ?? [];
 
   useEffect(() => {
     const channel = supabase
@@ -492,7 +480,7 @@ export default function DailyData() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Daily Ad Data</h1>
-          <p className="text-sm text-muted-foreground">ഓരോ ദിവസത്തെയും Facebook Ad metrics & Sales</p>
+          <p className="text-sm text-muted-foreground">ഓരോ ദിവസത്തെയും Facebook Ad metrics & Sales • {currentMonth} (Current Month)</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <div className="flex gap-2">
