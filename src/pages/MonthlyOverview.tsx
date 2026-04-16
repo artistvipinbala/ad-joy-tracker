@@ -266,6 +266,19 @@ export default function MonthlyOverview() {
     setExpenseDialogOpen(true);
   };
 
+  const openEditAd = (entry: any) => {
+    setAdEditId(entry.id);
+    setAdDate(entry.date);
+    setAdSpend(String(entry.ad_spend));
+    setAdDialogOpen(true);
+  };
+
+  const handleSaveAd = () => {
+    const spend = Number(adSpend);
+    if (spend < 0 || !adEditId) { toast.error("Invalid ad spend value"); return; }
+    adSpendMutation.mutate({ id: adEditId, date: adDate, ad_spend: spend });
+  };
+
   const handleSaveSales = () => {
     const total = Number(salesTotal);
     const gpay = Number(salesGpay || 0);
