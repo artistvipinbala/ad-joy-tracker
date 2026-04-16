@@ -7,10 +7,12 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { formatINR, formatNumber, formatPercent } from "@/lib/format";
 import {
   Plus, Pencil, RefreshCw, TrendingUp, TrendingDown, IndianRupee,
-  ShoppingCart, DollarSign, Euro, Target, Percent, Wallet,
+  ShoppingCart, DollarSign, Euro, Target, Percent, Wallet, ChevronDown, ChevronRight,
+  Megaphone, Layers, FileImage,
 } from "lucide-react";
 import { toast } from "sonner";
 
