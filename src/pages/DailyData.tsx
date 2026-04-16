@@ -412,6 +412,8 @@ export default function DailyData() {
     const eurQty = sale?.eur_quantity ?? 0;
     const platformQty = qty - gpay - usdQty - eurQty;
     const spend = Number(adRow.ad_spend);
+    const adGst = spend * 0.18;
+    const spendWithGst = spend + adGst;
     const expenses = getExpensesForDate(adRow.date);
 
     const price = Number(productConfig?.price || 499);
@@ -423,18 +425,19 @@ export default function DailyData() {
     const eurAmountInr = Number(sale?.eur_amount_inr ?? 0);
     const totalRevenue = inrRevenue + usdAmountInr + eurAmountInr;
 
-    // Commission: 2.5% on platform INR sales only (not GPay, not USD/EUR)
+    // Commission: 2.5% on platform INR sales only (not GPay)
     const commission = platformQty * amountPerSale * COMMISSION_RATE;
     // Also 2.5% on USD/EUR after conversion
     const usdCommission = usdAmountInr * COMMISSION_RATE;
     const eurCommission = eurAmountInr * COMMISSION_RATE;
     const totalCommission = commission + usdCommission + eurCommission;
 
-    const gst = Number(sale?.gst_collected ?? 0);
-    const profit = totalRevenue - totalCommission - spend - expenses - gst;
-    const cac = qty > 0 ? spend / qty : 0;
+    const gstCollected = Number(sale?.gst_collected ?? 0);
+    const gstPayable = gstCollected - adGst; // GST collected minus ad GST input credit
+    const profit = totalRevenue - totalCommission - spendWithGst - expenses - gstPayable;
+    const cac = qty > 0 ? spendWithGst / qty : 0;
 
-    return { qty, gpay, usdQty, eurQty, totalRevenue, totalCommission, gst, profit, cac, spend, usdAmountInr, eurAmountInr };
+    return { qty, gpay, usdQty, eurQty, totalRevenue, totalCommission, gst: gstCollected, gstPayable, profit, cac, spend: spendWithGst, usdAmountInr, eurAmountInr };
   };
 
   // Yearly totals
