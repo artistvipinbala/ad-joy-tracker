@@ -1,30 +1,46 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { formatINR, formatNumber, formatPercent } from "@/lib/format";
-import { TrendingUp, TrendingDown, IndianRupee, ShoppingCart, Wallet, Target, Percent } from "lucide-react";
+import {
+  TrendingUp, TrendingDown, IndianRupee, ShoppingCart, Wallet, Target, Percent,
+  Pencil, Trash2, Plus, ChevronDown, ChevronRight,
+} from "lucide-react";
+import { toast } from "sonner";
 import ProfitBreakdown from "@/components/ProfitBreakdown";
 
 const COMMISSION_RATE = 0.025;
 
-interface MonthRow {
-  month: string;
-  ad_spend: number;
-  impressions: number;
-  clicks: number;
-  avg_ctr: number;
-  avg_cpl: number;
-  avg_cpr: number;
-  avg_frequency: number;
-  total_reach: number;
-  conversions: number;
-  three_second_views: number;
-  fifty_percent_views: number;
-  ninety_five_percent_views: number;
-}
-
 export default function MonthlyOverview() {
+  const queryClient = useQueryClient();
+  const [expandedMonth, setExpandedMonth] = useState<string | null>(null);
+
+  // Sales dialog state
+  const [salesDialogOpen, setSalesDialogOpen] = useState(false);
+  const [salesDate, setSalesDate] = useState("");
+  const [salesTotal, setSalesTotal] = useState("");
+  const [salesGpay, setSalesGpay] = useState("");
+  const [salesUsd, setSalesUsd] = useState("");
+  const [salesEur, setSalesEur] = useState("");
+  const [usdRate, setUsdRate] = useState(0);
+  const [eurRate, setEurRate] = useState(0);
+  const [fetchingRates, setFetchingRates] = useState(false);
+  const [editSalesId, setEditSalesId] = useState<string | null>(null);
+  const [salesMonth, setSalesMonth] = useState("");
+
+  // Expense dialog state
+  const [expenseDialogOpen, setExpenseDialogOpen] = useState(false);
+  const [expenseDate, setExpenseDate] = useState("");
+  const [expenseAmount, setExpenseAmount] = useState("");
+  const [expenseDesc, setExpenseDesc] = useState("");
+  const [editExpenseId, setEditExpenseId] = useState<string | null>(null);
+
   const { data: productConfig } = useQuery({
     queryKey: ["product-config"],
     queryFn: async () => {
@@ -44,7 +60,7 @@ export default function MonthlyOverview() {
   const { data: salesData } = useQuery({
     queryKey: ["sales-all"],
     queryFn: async () => {
-      const { data } = await supabase.from("sales_entries").select("*");
+      const { data } = await supabase.from("sales_entries").select("*").order("date", { ascending: false });
       return data ?? [];
     },
   });
@@ -52,16 +68,206 @@ export default function MonthlyOverview() {
   const { data: expensesData } = useQuery({
     queryKey: ["expenses-all"],
     queryFn: async () => {
-      const { data } = await supabase.from("expenses").select("*");
+      const { data } = await supabase.from("expenses").select("*").order("date", { ascending: false });
       return data ?? [];
     },
   });
+
+  // Realtime sync
+  useEffect(() => {
+    const channel = supabase
+      .channel("monthly-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "ad_daily_data" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["ad-data-all"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "sales_entries" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["sales-all"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "expenses" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["expenses-all"] });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [queryClient]);
 
   const price = Number(productConfig?.price || 499);
   const gstRate = Number(productConfig?.gst_rate_percent || 18) / 100;
   const amountPerSale = price * (1 + gstRate);
 
-  // Aggregate by month
+  // --- Mutations ---
+  const salesMutation = useMutation({
+    mutationFn: async (params: {
+      date: string; quantity: number; gpayQty: number;
+      usdQty: number; eurQty: number; usdRate: number; eurRate: number;
+      existingId?: string | null;
+    }) => {
+      const inrQty = params.quantity - params.gpayQty - params.usdQty - params.eurQty;
+      const totalAmountInr = inrQty * amountPerSale + params.gpayQty * amountPerSale;
+      const usdAmountInr = params.usdQty * 7 * params.usdRate;
+      const eurAmountInr = params.eurQty * 7 * params.eurRate;
+      const gstCollected = price * gstRate * (params.quantity - params.usdQty - params.eurQty);
+
+      const record = {
+        date: params.date,
+        quantity: params.quantity,
+        gpay_quantity: params.gpayQty,
+        usd_quantity: params.usdQty,
+        eur_quantity: params.eurQty,
+        usd_rate: params.usdRate,
+        eur_rate: params.eurRate,
+        usd_amount_inr: usdAmountInr,
+        eur_amount_inr: eurAmountInr,
+        amount_per_sale: amountPerSale,
+        total_amount: totalAmountInr + usdAmountInr + eurAmountInr,
+        gst_collected: gstCollected,
+      };
+
+      if (params.existingId) {
+        const { error } = await supabase.from("sales_entries").update(record).eq("id", params.existingId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("sales_entries").insert(record);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sales-all"] });
+      setSalesDialogOpen(false);
+      toast.success("Sales saved!");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const deleteSalesMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("sales_entries").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sales-all"] });
+      toast.success("Sales entry deleted!");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const expenseMutation = useMutation({
+    mutationFn: async (params: { date: string; amount: number; description: string; existingId?: string | null }) => {
+      const record = { date: params.date, amount: params.amount, description: params.description };
+      if (params.existingId) {
+        const { error } = await supabase.from("expenses").update(record).eq("id", params.existingId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("expenses").insert(record);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["expenses-all"] });
+      setExpenseDialogOpen(false);
+      toast.success("Expense saved!");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const deleteExpenseMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("expenses").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["expenses-all"] });
+      toast.success("Expense deleted!");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  // --- Helpers ---
+  const fetchExchangeRates = async (date: string) => {
+    setFetchingRates(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("get-exchange-rates", { body: { date } });
+      if (error) throw error;
+      setUsdRate(data.usd_to_inr || 0);
+      setEurRate(data.eur_to_inr || 0);
+    } catch (e: any) {
+      toast.error("Rate fetch failed: " + (e.message || "Unknown error"));
+    } finally {
+      setFetchingRates(false);
+    }
+  };
+
+  const openAddSales = (month: string) => {
+    setSalesMonth(month);
+    setSalesDate(`${month}-01`);
+    setSalesTotal(""); setSalesGpay(""); setSalesUsd(""); setSalesEur("");
+    setUsdRate(0); setEurRate(0); setEditSalesId(null);
+    setSalesDialogOpen(true);
+    fetchExchangeRates(`${month}-01`);
+  };
+
+  const openEditSales = (entry: any) => {
+    setSalesMonth(entry.date.substring(0, 7));
+    setSalesDate(entry.date);
+    setSalesTotal(String(entry.quantity));
+    setSalesGpay(String(entry.gpay_quantity ?? 0));
+    setSalesUsd(String(entry.usd_quantity ?? 0));
+    setSalesEur(String(entry.eur_quantity ?? 0));
+    setUsdRate(Number(entry.usd_rate ?? 0));
+    setEurRate(Number(entry.eur_rate ?? 0));
+    setEditSalesId(entry.id);
+    setSalesDialogOpen(true);
+    fetchExchangeRates(entry.date);
+  };
+
+  const openAddExpense = (month: string) => {
+    setExpenseDate(`${month}-01`);
+    setExpenseAmount(""); setExpenseDesc(""); setEditExpenseId(null);
+    setExpenseDialogOpen(true);
+  };
+
+  const openEditExpense = (entry: any) => {
+    setExpenseDate(entry.date);
+    setExpenseAmount(String(entry.amount));
+    setExpenseDesc(entry.description ?? "");
+    setEditExpenseId(entry.id);
+    setExpenseDialogOpen(true);
+  };
+
+  const handleSaveSales = () => {
+    const total = Number(salesTotal);
+    const gpay = Number(salesGpay || 0);
+    const usd = Number(salesUsd || 0);
+    const eur = Number(salesEur || 0);
+    if (total < 0 || gpay < 0 || usd < 0 || eur < 0 || (gpay + usd + eur) > total) {
+      toast.error("Invalid values — GPay + USD + EUR cannot exceed total");
+      return;
+    }
+    salesMutation.mutate({
+      date: salesDate, quantity: total, gpayQty: gpay,
+      usdQty: usd, eurQty: eur, usdRate, eurRate,
+      existingId: editSalesId,
+    });
+  };
+
+  const handleSaveExpense = () => {
+    const amount = Number(expenseAmount);
+    if (amount <= 0) { toast.error("Enter a valid amount"); return; }
+    expenseMutation.mutate({
+      date: expenseDate, amount, description: expenseDesc,
+      existingId: editExpenseId,
+    });
+  };
+
+  // --- Aggregate by month ---
+  interface MonthRow {
+    month: string;
+    ad_spend: number;
+    impressions: number; clicks: number;
+    avg_ctr: number; avg_cpl: number; avg_cpr: number; avg_frequency: number;
+    total_reach: number; conversions: number;
+    three_second_views: number; fifty_percent_views: number; ninety_five_percent_views: number;
+  }
+
   const monthlyMap = new Map<string, MonthRow>();
   adData?.forEach((r) => {
     const month = r.date.substring(0, 7);
@@ -77,16 +283,26 @@ export default function MonthlyOverview() {
       existing.ninety_five_percent_views += r.ninety_five_percent_views;
     } else {
       monthlyMap.set(month, {
-        month,
-        ad_spend: Number(r.ad_spend),
-        impressions: r.impressions,
-        clicks: r.clicks,
+        month, ad_spend: Number(r.ad_spend),
+        impressions: r.impressions, clicks: r.clicks,
         avg_ctr: 0, avg_cpl: 0, avg_cpr: 0, avg_frequency: 0,
-        total_reach: r.reach,
-        conversions: r.conversions,
+        total_reach: r.reach, conversions: r.conversions,
         three_second_views: r.three_second_views,
         fifty_percent_views: r.fifty_percent_views,
         ninety_five_percent_views: r.ninety_five_percent_views,
+      });
+    }
+  });
+
+  // Also ensure months with sales but no ads appear
+  salesData?.forEach((s) => {
+    const month = s.date.substring(0, 7);
+    if (!monthlyMap.has(month)) {
+      monthlyMap.set(month, {
+        month, ad_spend: 0, impressions: 0, clicks: 0,
+        avg_ctr: 0, avg_cpl: 0, avg_cpr: 0, avg_frequency: 0,
+        total_reach: 0, conversions: 0,
+        three_second_views: 0, fifty_percent_views: 0, ninety_five_percent_views: 0,
       });
     }
   });
@@ -98,7 +314,7 @@ export default function MonthlyOverview() {
     avg_cpr: m.conversions > 0 ? m.ad_spend / m.conversions : 0,
   })).sort((a, b) => b.month.localeCompare(a.month));
 
-  // Monthly P&L with proper formula matching Dashboard
+  // Monthly P&L
   const monthlyPL = monthlyRows.map((m) => {
     const monthSales = salesData?.filter((s) => s.date.substring(0, 7) === m.month) ?? [];
     const monthExpenses = expensesData?.filter((e) => e.date.substring(0, 7) === m.month) ?? [];
@@ -123,14 +339,14 @@ export default function MonthlyOverview() {
     const roas = spendWithGst > 0 ? totalRevenue / spendWithGst : 0;
 
     return {
-      ...m,
-      totalSalesCount, totalGpayCount, totalUsdCount, totalEurCount, platformCount,
+      ...m, totalSalesCount, totalGpayCount, totalUsdCount, totalEurCount, platformCount,
       totalRevenue, totalGST, usdAmountTotal, eurAmountTotal, totalExpenses,
       adGst, spendWithGst, commissionDeduction, gstPayable, netProfit, roas,
+      monthSales, monthExpenses,
     };
   });
 
-  // All-time totals for the profit breakdown
+  // All-time totals
   const allTimeSpendRaw = adData?.reduce((s, r) => s + Number(r.ad_spend), 0) ?? 0;
   const allTimeAdGst = allTimeSpendRaw * 0.18;
   const allTimeSpendWithGst = allTimeSpendRaw + allTimeAdGst;
@@ -241,6 +457,143 @@ export default function MonthlyOverview() {
         commissionRate={COMMISSION_RATE}
       />
 
+      {/* Monthly P&L Table with Edit */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm">Monthly Profit & Loss</CardTitle>
+          <p className="text-xs text-muted-foreground">Click a month row to view & edit sales/expenses</p>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead></TableHead>
+                  <TableHead>Month</TableHead>
+                  <TableHead>Total Sales</TableHead>
+                  <TableHead>Revenue</TableHead>
+                  <TableHead>Ad Spend (incl GST)</TableHead>
+                  <TableHead>Commission</TableHead>
+                  <TableHead>Other Expenses</TableHead>
+                  <TableHead>GST Payable</TableHead>
+                  <TableHead>Net Profit</TableHead>
+                  <TableHead>ROAS</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {monthlyPL.length > 0 ? monthlyPL.map((m) => {
+                  const isExpanded = expandedMonth === m.month;
+                  return (
+                    <>
+                      <TableRow
+                        key={m.month}
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => setExpandedMonth(isExpanded ? null : m.month)}
+                      >
+                        <TableCell className="w-8">
+                          {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                        </TableCell>
+                        <TableCell className="font-medium">{m.month}</TableCell>
+                        <TableCell className="font-medium">{m.totalSalesCount}</TableCell>
+                        <TableCell className="text-green-600">{formatINR(m.totalRevenue)}</TableCell>
+                        <TableCell className="text-destructive">{formatINR(m.spendWithGst)}</TableCell>
+                        <TableCell className="text-destructive">{formatINR(m.commissionDeduction)}</TableCell>
+                        <TableCell className="text-destructive">{formatINR(m.totalExpenses)}</TableCell>
+                        <TableCell className="text-amber-500">{formatINR(m.gstPayable)}</TableCell>
+                        <TableCell className={m.netProfit >= 0 ? "text-green-600 font-bold" : "text-destructive font-bold"}>
+                          {formatINR(m.netProfit)}
+                        </TableCell>
+                        <TableCell className="text-primary font-medium">{m.roas.toFixed(2)}x</TableCell>
+                      </TableRow>
+
+                      {/* Expanded detail row */}
+                      {isExpanded && (
+                        <TableRow key={`${m.month}-detail`}>
+                          <TableCell colSpan={10} className="bg-muted/30 p-4">
+                            <div className="space-y-4">
+                              {/* Sales entries for this month */}
+                              <div>
+                                <div className="flex items-center justify-between mb-2">
+                                  <h4 className="text-xs font-bold">📦 Sales Entries</h4>
+                                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); openAddSales(m.month); }}>
+                                    <Plus className="h-3 w-3 mr-1" /> Add Sales
+                                  </Button>
+                                </div>
+                                {m.monthSales.length > 0 ? (
+                                  <div className="space-y-1">
+                                    {m.monthSales.map((s) => (
+                                      <div key={s.id} className="flex items-center justify-between bg-background rounded px-3 py-2 text-xs border">
+                                        <div className="flex items-center gap-4">
+                                          <span className="font-medium">{s.date}</span>
+                                          <span>Qty: <strong>{s.quantity}</strong></span>
+                                          {s.gpay_quantity > 0 && <span className="text-green-600">GPay: {s.gpay_quantity}</span>}
+                                          {s.usd_quantity > 0 && <span className="text-blue-600">USD: {s.usd_quantity}</span>}
+                                          {s.eur_quantity > 0 && <span className="text-purple-600">EUR: {s.eur_quantity}</span>}
+                                          <span className="text-green-600 font-bold">{formatINR(Number(s.total_amount))}</span>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); openEditSales(s); }}>
+                                            <Pencil className="h-3 w-3" />
+                                          </Button>
+                                          <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive" onClick={(e) => { e.stopPropagation(); deleteSalesMutation.mutate(s.id); }}>
+                                            <Trash2 className="h-3 w-3" />
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <p className="text-xs text-muted-foreground">No sales entries for this month</p>
+                                )}
+                              </div>
+
+                              {/* Expenses for this month */}
+                              <div>
+                                <div className="flex items-center justify-between mb-2">
+                                  <h4 className="text-xs font-bold">🛒 Expenses</h4>
+                                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); openAddExpense(m.month); }}>
+                                    <Plus className="h-3 w-3 mr-1" /> Add Expense
+                                  </Button>
+                                </div>
+                                {m.monthExpenses.length > 0 ? (
+                                  <div className="space-y-1">
+                                    {m.monthExpenses.map((exp) => (
+                                      <div key={exp.id} className="flex items-center justify-between bg-background rounded px-3 py-2 text-xs border">
+                                        <div className="flex items-center gap-4">
+                                          <span className="font-medium">{exp.date}</span>
+                                          <span>{exp.description || "—"}</span>
+                                          <span className="text-destructive font-bold">{formatINR(Number(exp.amount))}</span>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); openEditExpense(exp); }}>
+                                            <Pencil className="h-3 w-3" />
+                                          </Button>
+                                          <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive" onClick={(e) => { e.stopPropagation(); deleteExpenseMutation.mutate(exp.id); }}>
+                                            <Trash2 className="h-3 w-3" />
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <p className="text-xs text-muted-foreground">No expenses for this month</p>
+                                )}
+                              </div>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </>
+                  );
+                }) : (
+                  <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">No data</TableCell></TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Monthly Ad Metrics Table */}
       <Card>
         <CardHeader>
@@ -290,48 +643,80 @@ export default function MonthlyOverview() {
         </CardContent>
       </Card>
 
-      {/* Monthly P&L Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm">Monthly Profit & Loss</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Month</TableHead>
-                  <TableHead>Revenue</TableHead>
-                  <TableHead>Ad Spend (incl GST)</TableHead>
-                  <TableHead>Commission</TableHead>
-                  <TableHead>Other Expenses</TableHead>
-                  <TableHead>GST Payable</TableHead>
-                  <TableHead>Net Profit</TableHead>
-                  <TableHead>ROAS</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {monthlyPL.length > 0 ? monthlyPL.map((m) => (
-                  <TableRow key={m.month}>
-                    <TableCell className="font-medium">{m.month}</TableCell>
-                    <TableCell className="text-green-600">{formatINR(m.totalRevenue)}</TableCell>
-                    <TableCell className="text-destructive">{formatINR(m.spendWithGst)}</TableCell>
-                    <TableCell className="text-destructive">{formatINR(m.commissionDeduction)}</TableCell>
-                    <TableCell className="text-destructive">{formatINR(m.totalExpenses)}</TableCell>
-                    <TableCell className="text-amber-500">{formatINR(m.gstPayable)}</TableCell>
-                    <TableCell className={m.netProfit >= 0 ? "text-green-600 font-bold" : "text-destructive font-bold"}>
-                      {formatINR(m.netProfit)}
-                    </TableCell>
-                    <TableCell className="text-primary font-medium">{m.roas.toFixed(2)}x</TableCell>
-                  </TableRow>
-                )) : (
-                  <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">No data</TableCell></TableRow>
-                )}
-              </TableBody>
-            </Table>
+      {/* Sales Dialog */}
+      <Dialog open={salesDialogOpen} onOpenChange={setSalesDialogOpen}>
+        <DialogContent className="max-w-md" onClick={(e) => e.stopPropagation()}>
+          <DialogHeader>
+            <DialogTitle>{editSalesId ? "Edit" : "Add"} Sales Entry</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Date</Label>
+              <Input type="date" value={salesDate} onChange={(e) => { setSalesDate(e.target.value); fetchExchangeRates(e.target.value); }} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Total Sales</Label>
+                <Input type="number" value={salesTotal} onChange={(e) => setSalesTotal(e.target.value)} placeholder="0" />
+              </div>
+              <div>
+                <Label>GPay (no commission)</Label>
+                <Input type="number" value={salesGpay} onChange={(e) => setSalesGpay(e.target.value)} placeholder="0" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>USD Sales</Label>
+                <Input type="number" value={salesUsd} onChange={(e) => setSalesUsd(e.target.value)} placeholder="0" />
+              </div>
+              <div>
+                <Label>EUR Sales</Label>
+                <Input type="number" value={salesEur} onChange={(e) => setSalesEur(e.target.value)} placeholder="0" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div>
+                <Label>USD→INR Rate</Label>
+                <Input type="number" value={usdRate} onChange={(e) => setUsdRate(Number(e.target.value))} />
+              </div>
+              <div>
+                <Label>EUR→INR Rate</Label>
+                <Input type="number" value={eurRate} onChange={(e) => setEurRate(Number(e.target.value))} />
+              </div>
+            </div>
+            {fetchingRates && <p className="text-xs text-muted-foreground">Fetching rates...</p>}
+            <Button onClick={handleSaveSales} className="w-full" disabled={salesMutation.isPending}>
+              {salesMutation.isPending ? "Saving..." : "Save Sales"}
+            </Button>
           </div>
-        </CardContent>
-      </Card>
+        </DialogContent>
+      </Dialog>
+
+      {/* Expense Dialog */}
+      <Dialog open={expenseDialogOpen} onOpenChange={setExpenseDialogOpen}>
+        <DialogContent className="max-w-md" onClick={(e) => e.stopPropagation()}>
+          <DialogHeader>
+            <DialogTitle>{editExpenseId ? "Edit" : "Add"} Expense</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Date</Label>
+              <Input type="date" value={expenseDate} onChange={(e) => setExpenseDate(e.target.value)} />
+            </div>
+            <div>
+              <Label>Amount (₹)</Label>
+              <Input type="number" value={expenseAmount} onChange={(e) => setExpenseAmount(e.target.value)} placeholder="0" />
+            </div>
+            <div>
+              <Label>Description</Label>
+              <Input value={expenseDesc} onChange={(e) => setExpenseDesc(e.target.value)} placeholder="e.g. AI Tool subscription" />
+            </div>
+            <Button onClick={handleSaveExpense} className="w-full" disabled={expenseMutation.isPending}>
+              {expenseMutation.isPending ? "Saving..." : "Save Expense"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
