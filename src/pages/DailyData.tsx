@@ -442,7 +442,9 @@ export default function DailyData() {
 
   // Yearly totals
   const yearlyTotals = (() => {
-    const totalSpend = rows?.reduce((s, r) => s + Number(r.ad_spend), 0) ?? 0;
+    const totalSpendRaw = rows?.reduce((s, r) => s + Number(r.ad_spend), 0) ?? 0;
+    const adGst = totalSpendRaw * 0.18;
+    const totalSpendWithGst = totalSpendRaw + adGst;
     const totalSales = salesData?.reduce((s, r) => s + r.quantity, 0) ?? 0;
     const totalGpay = salesData?.reduce((s, r) => s + (r.gpay_quantity ?? 0), 0) ?? 0;
     const totalUsd = salesData?.reduce((s, r) => s + (r.usd_quantity ?? 0), 0) ?? 0;
@@ -457,11 +459,12 @@ export default function DailyData() {
     const gstRate = Number(productConfig?.gst_rate_percent || 18) / 100;
     const amountPerSale = price * (1 + gstRate);
     const commission = platformQty * amountPerSale * COMMISSION_RATE + (usdAmountTotal + eurAmountTotal) * COMMISSION_RATE;
-    const profit = totalRevenue - commission - totalSpend - totalExpenses - totalGST;
-    const roas = totalSpend > 0 ? totalRevenue / totalSpend : 0;
-    const cac = totalSales > 0 ? totalSpend / totalSales : 0;
+    const gstPayable = totalGST - adGst;
+    const profit = totalRevenue - commission - totalSpendWithGst - totalExpenses - gstPayable;
+    const roas = totalSpendWithGst > 0 ? totalRevenue / totalSpendWithGst : 0;
+    const cac = totalSales > 0 ? totalSpendWithGst / totalSales : 0;
 
-    return { totalSpend, totalSales, totalGpay, totalUsd, totalEur, totalRevenue, totalGST, totalExpenses, commission, profit, roas, cac };
+    return { totalSpend: totalSpendWithGst, totalSales, totalGpay, totalUsd, totalEur, totalRevenue, totalGST, totalExpenses, commission, profit, roas, cac };
   })();
 
   return (
