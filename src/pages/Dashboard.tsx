@@ -321,11 +321,11 @@ export default function Dashboard() {
               <div className="bg-muted/50 rounded-md p-3 text-xs space-y-1">
                 <div className="flex justify-between">
                   <span>Total Revenue</span>
-                  <span className="font-semibold">{formatINR(Number(editTotal) * PRICE_PER_SALE)}</span>
+                  <span className="font-semibold">{formatINR(Number(editTotal) * amountPerSale)}</span>
                 </div>
                 <div className="flex justify-between text-muted-foreground">
                   <span>Platform ({Number(editTotal) - Number(editGpay || 0)}) × 2.5%</span>
-                  <span>-{formatINR((Number(editTotal) - Number(editGpay || 0)) * PRICE_PER_SALE * COMMISSION_RATE)}</span>
+                  <span>-{formatINR((Number(editTotal) - Number(editGpay || 0)) * amountPerSale * COMMISSION_RATE)}</span>
                 </div>
                 <div className="flex justify-between text-muted-foreground">
                   <span>GPay ({Number(editGpay || 0)}) — no commission</span>
