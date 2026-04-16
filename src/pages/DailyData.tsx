@@ -12,7 +12,7 @@ import { formatINR, formatNumber, formatPercent } from "@/lib/format";
 import {
   Plus, Pencil, RefreshCw, TrendingUp, TrendingDown, IndianRupee,
   ShoppingCart, DollarSign, Euro, Target, Percent, Wallet, ChevronDown, ChevronRight,
-  Megaphone, Layers, FileImage,
+  Megaphone, Layers, FileImage, Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -250,27 +250,15 @@ export default function DailyData() {
     ads: breakdownData?.filter((b) => b.date === date && b.level === "ad") ?? [],
   });
 
-  const adDates = [...(rows?.map((row) => row.date) ?? [])].sort();
-  const salesDates = [...(salesData?.map((row) => row.date) ?? [])].sort();
+  // Current month filter
+  const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const currentMonthStart = `${currentMonth}-01`;
+  const currentMonthEnd = `${currentMonth}-31`;
 
-  const reportStart = adDates.length > 0 && salesDates.length > 0
-    ? (adDates[0] > salesDates[0] ? adDates[0] : salesDates[0])
-    : (adDates[0] ?? salesDates[0] ?? null);
-  const reportEnd = adDates.length > 0 && salesDates.length > 0
-    ? (adDates[adDates.length - 1] < salesDates[salesDates.length - 1] ? adDates[adDates.length - 1] : salesDates[salesDates.length - 1])
-    : (adDates[adDates.length - 1] ?? salesDates[salesDates.length - 1] ?? null);
-
-  const hasReportingRange = Boolean(reportStart && reportEnd && reportStart <= reportEnd);
-
-  const reportRows = hasReportingRange
-    ? (rows?.filter((row) => row.date >= reportStart! && row.date <= reportEnd!) ?? [])
-    : [];
-  const reportSalesData = hasReportingRange
-    ? (salesData?.filter((row) => row.date >= reportStart! && row.date <= reportEnd!) ?? [])
-    : [];
-  const reportExpensesData = hasReportingRange
-    ? (expensesData?.filter((row) => row.date >= reportStart! && row.date <= reportEnd!) ?? [])
-    : [];
+  const reportRows = rows?.filter((row) => row.date >= currentMonthStart && row.date <= currentMonthEnd) ?? [];
+  const reportSalesData = salesData?.filter((row) => row.date >= currentMonthStart && row.date <= currentMonthEnd) ?? [];
+  const reportExpensesData = expensesData?.filter((row) => row.date >= currentMonthStart && row.date <= currentMonthEnd) ?? [];
 
   useEffect(() => {
     const channel = supabase
@@ -304,6 +292,31 @@ export default function DailyData() {
       toast.success("Data saved!");
     },
     onError: (e) => toast.error(e.message),
+  });
+
+  const deleteAdMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("ad_daily_data").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ad-daily"] });
+      queryClient.invalidateQueries({ queryKey: ["ad-data-all"] });
+      toast.success("Ad entry deleted!");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const deleteSalesMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("sales_entries").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sales-all"] });
+      toast.success("Sales entry deleted!");
+    },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const salesMutation = useMutation({
@@ -492,7 +505,7 @@ export default function DailyData() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Daily Ad Data</h1>
-          <p className="text-sm text-muted-foreground">ഓരോ ദിവസത്തെയും Facebook Ad metrics & Sales</p>
+          <p className="text-sm text-muted-foreground">ഓരോ ദിവസത്തെയും Facebook Ad metrics & Sales • {currentMonth} (Current Month)</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <div className="flex gap-2">
@@ -614,7 +627,7 @@ export default function DailyData() {
         {isLoading ? (
           <Card><CardContent className="py-10 text-center text-muted-foreground">Loading...</CardContent></Card>
         ) : rows && rows.length > 0 ? (
-          rows.map((r) => {
+          rows.filter((r) => r.date >= currentMonthStart && r.date <= currentMonthEnd).map((r) => {
             const m = computeDayMetrics(r);
             const sale = getSalesForDate(r.date);
             return (
@@ -649,6 +662,18 @@ export default function DailyData() {
                       }}
                     >
                       <Pencil className="h-3 w-3" />
+                    </Button>
+                    <Button
+                      variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"
+                      onClick={() => {
+                        if (confirm(`Delete ad data for ${r.date}?`)) {
+                          deleteAdMutation.mutate(r.id);
+                          const saleEntry = getSalesForDate(r.date);
+                          if (saleEntry) deleteSalesMutation.mutate(saleEntry.id);
+                        }
+                      }}
+                    >
+                      <Trash2 className="h-3 w-3" />
                     </Button>
                   </div>
                 </div>
