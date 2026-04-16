@@ -794,6 +794,29 @@ export default function MonthlyOverview() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Ad Spend Edit Dialog */}
+      <Dialog open={adDialogOpen} onOpenChange={setAdDialogOpen}>
+        <DialogContent className="max-w-sm" onClick={(e) => e.stopPropagation()}>
+          <DialogHeader>
+            <DialogTitle>Edit Ad Spend</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Date</Label>
+              <Input type="date" value={adDate} disabled />
+            </div>
+            <div>
+              <Label>Ad Spend (₹) — excl. GST</Label>
+              <Input type="number" value={adSpend} onChange={(e) => setAdSpend(e.target.value)} placeholder="0" />
+            </div>
+            <p className="text-xs text-muted-foreground">With 18% GST: {formatINR(Number(adSpend || 0) * 1.18)}</p>
+            <Button onClick={handleSaveAd} className="w-full" disabled={adSpendMutation.isPending}>
+              {adSpendMutation.isPending ? "Saving..." : "Save Ad Spend"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
