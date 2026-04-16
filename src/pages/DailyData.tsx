@@ -118,6 +118,30 @@ export default function DailyData() {
     refetchInterval: 10 * 60 * 1000,
   });
 
+  const { data: breakdownData } = useQuery({
+    queryKey: ["ad-breakdown"],
+    queryFn: async () => {
+      const { data } = await supabase.from("ad_breakdown").select("*").order("date", { ascending: false });
+      return data ?? [];
+    },
+    refetchInterval: 10 * 60 * 1000,
+  });
+
+  const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
+  const toggleDate = (date: string) => {
+    setExpandedDates((prev) => {
+      const next = new Set(prev);
+      if (next.has(date)) next.delete(date); else next.add(date);
+      return next;
+    });
+  };
+
+  const getBreakdownForDate = (date: string) => ({
+    campaigns: breakdownData?.filter((b) => b.date === date && b.level === "campaign") ?? [],
+    adsets: breakdownData?.filter((b) => b.date === date && b.level === "adset") ?? [],
+    ads: breakdownData?.filter((b) => b.date === date && b.level === "ad") ?? [],
+  });
+
   useEffect(() => {
     const channel = supabase
       .channel("ad-daily-realtime")
