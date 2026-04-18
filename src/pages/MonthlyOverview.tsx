@@ -406,36 +406,46 @@ export default function MonthlyOverview() {
     avg_cpr: m.conversions > 0 ? m.ad_spend / m.conversions : 0,
   })).sort((a, b) => b.month.localeCompare(a.month));
 
-  // Monthly P&L
+  // Monthly P&L (with overrides applied)
   const monthlyPL = monthlyRows.map((m) => {
     const monthSales = salesData?.filter((s) => s.date.substring(0, 7) === m.month) ?? [];
     const monthExpenses = expensesData?.filter((e) => e.date.substring(0, 7) === m.month) ?? [];
     const monthAdData = adData?.filter((a) => a.date.substring(0, 7) === m.month) ?? [];
+    const override = overridesData?.find((o) => o.month === m.month);
 
-    const totalSalesCount = monthSales.reduce((s, r) => s + r.quantity, 0);
+    const baseTotalSalesCount = monthSales.reduce((s, r) => s + r.quantity, 0);
     const totalGpayCount = monthSales.reduce((s, r) => s + (r.gpay_quantity ?? 0), 0);
     const totalUsdCount = monthSales.reduce((s, r) => s + (r.usd_quantity ?? 0), 0);
     const totalEurCount = monthSales.reduce((s, r) => s + (r.eur_quantity ?? 0), 0);
-    const platformCount = totalSalesCount - totalGpayCount - totalUsdCount - totalEurCount;
 
-    const totalRevenue = monthSales.reduce((s, r) => s + Number(r.total_amount), 0);
+    const baseRevenue = monthSales.reduce((s, r) => s + Number(r.total_amount), 0);
     const totalGST = monthSales.reduce((s, r) => s + Number(r.gst_collected), 0);
     const usdAmountTotal = monthSales.reduce((s, r) => s + Number(r.usd_amount_inr ?? 0), 0);
     const eurAmountTotal = monthSales.reduce((s, r) => s + Number(r.eur_amount_inr ?? 0), 0);
-    const totalExpenses = monthExpenses.reduce((s, r) => s + Number(r.amount), 0);
+    const baseExpenses = monthExpenses.reduce((s, r) => s + Number(r.amount), 0);
+    const baseAdSpendRaw = m.ad_spend;
 
-    const adGst = m.ad_spend * 0.18;
-    const spendWithGst = m.ad_spend + adGst;
-    const commissionDeduction = platformCount * amountPerSale * COMMISSION_RATE + (usdAmountTotal + eurAmountTotal) * COMMISSION_RATE;
+    // Apply overrides if present (null = no override)
+    const totalSalesCount = override?.total_sales_count != null ? Number(override.total_sales_count) : baseTotalSalesCount;
+    const totalRevenue = override?.total_revenue != null ? Number(override.total_revenue) : baseRevenue;
+    const adSpendRaw = override?.ad_spend != null ? Number(override.ad_spend) : baseAdSpendRaw;
+    const totalExpenses = override?.total_expenses != null ? Number(override.total_expenses) : baseExpenses;
+    const platformCount = totalSalesCount - totalGpayCount - totalUsdCount - totalEurCount;
+
+    const adGst = adSpendRaw * 0.18;
+    const spendWithGst = adSpendRaw + adGst;
+    const commissionDeduction = Math.max(0, platformCount) * amountPerSale * COMMISSION_RATE + (usdAmountTotal + eurAmountTotal) * COMMISSION_RATE;
     const gstPayable = totalGST - adGst;
     const netProfit = totalRevenue - commissionDeduction - spendWithGst - totalExpenses - gstPayable;
     const roas = spendWithGst > 0 ? totalRevenue / spendWithGst : 0;
 
     return {
-      ...m, totalSalesCount, totalGpayCount, totalUsdCount, totalEurCount, platformCount,
+      ...m, ad_spend: adSpendRaw,
+      totalSalesCount, totalGpayCount, totalUsdCount, totalEurCount, platformCount,
       totalRevenue, totalGST, usdAmountTotal, eurAmountTotal, totalExpenses,
       adGst, spendWithGst, commissionDeduction, gstPayable, netProfit, roas,
       monthSales, monthExpenses, monthAdData,
+      hasOverride: !!override,
     };
   });
 
