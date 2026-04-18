@@ -449,21 +449,21 @@ export default function MonthlyOverview() {
     };
   });
 
-  // All-time totals
-  const allTimeSpendRaw = adData?.reduce((s, r) => s + Number(r.ad_spend), 0) ?? 0;
+  // All-time totals (aggregated from monthlyPL so overrides are respected)
+  const allTimeSpendRaw = monthlyPL.reduce((s, r) => s + r.ad_spend, 0);
   const allTimeAdGst = allTimeSpendRaw * 0.18;
   const allTimeSpendWithGst = allTimeSpendRaw + allTimeAdGst;
-  const allTimeSalesCount = salesData?.reduce((s, r) => s + r.quantity, 0) ?? 0;
+  const allTimeSalesCount = monthlyPL.reduce((s, r) => s + r.totalSalesCount, 0);
   const allTimeGpay = salesData?.reduce((s, r) => s + (r.gpay_quantity ?? 0), 0) ?? 0;
   const allTimeUsd = salesData?.reduce((s, r) => s + (r.usd_quantity ?? 0), 0) ?? 0;
   const allTimeEur = salesData?.reduce((s, r) => s + (r.eur_quantity ?? 0), 0) ?? 0;
   const allTimePlatform = allTimeSalesCount - allTimeGpay - allTimeUsd - allTimeEur;
-  const allTimeRevenue = salesData?.reduce((s, r) => s + Number(r.total_amount), 0) ?? 0;
-  const allTimeGST = salesData?.reduce((s, r) => s + Number(r.gst_collected), 0) ?? 0;
+  const allTimeRevenue = monthlyPL.reduce((s, r) => s + r.totalRevenue, 0);
+  const allTimeGST = monthlyPL.reduce((s, r) => s + r.totalGST, 0);
   const allTimeUsdInr = salesData?.reduce((s, r) => s + Number(r.usd_amount_inr ?? 0), 0) ?? 0;
   const allTimeEurInr = salesData?.reduce((s, r) => s + Number(r.eur_amount_inr ?? 0), 0) ?? 0;
-  const allTimeExpenses = expensesData?.reduce((s, r) => s + Number(r.amount), 0) ?? 0;
-  const allTimeCommission = allTimePlatform * amountPerSale * COMMISSION_RATE + (allTimeUsdInr + allTimeEurInr) * COMMISSION_RATE;
+  const allTimeExpenses = monthlyPL.reduce((s, r) => s + r.totalExpenses, 0);
+  const allTimeCommission = monthlyPL.reduce((s, r) => s + r.commissionDeduction, 0);
   const allTimeGstPayable = allTimeGST - allTimeAdGst;
   const allTimeNetProfit = allTimeRevenue - allTimeCommission - allTimeSpendWithGst - allTimeExpenses - allTimeGstPayable;
   const allTimeRoas = allTimeSpendWithGst > 0 ? allTimeRevenue / allTimeSpendWithGst : 0;
