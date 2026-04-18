@@ -200,29 +200,52 @@ export default function MonthlyOverview() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const adSpendMutation = useMutation({
-    mutationFn: async (params: { id: string; date: string; ad_spend: number }) => {
-      const { error } = await supabase.from("ad_daily_data").update({ ad_spend: params.ad_spend, is_manual_override: true }).eq("id", params.id);
-      if (error) throw error;
+  const overrideMutation = useMutation({
+    mutationFn: async (params: {
+      month: string;
+      total_sales_count: number | null;
+      total_revenue: number | null;
+      ad_spend: number | null;
+      total_expenses: number | null;
+    }) => {
+      const existing = overridesData?.find((o) => o.month === params.month);
+      if (existing) {
+        const { error } = await supabase.from("monthly_overrides").update({
+          total_sales_count: params.total_sales_count,
+          total_revenue: params.total_revenue,
+          ad_spend: params.ad_spend,
+          total_expenses: params.total_expenses,
+        }).eq("id", existing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("monthly_overrides").insert({
+          month: params.month,
+          total_sales_count: params.total_sales_count,
+          total_revenue: params.total_revenue,
+          ad_spend: params.ad_spend,
+          total_expenses: params.total_expenses,
+        });
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["ad-data-all"] });
-      queryClient.invalidateQueries({ queryKey: ["ad-daily"] });
-      setAdDialogOpen(false);
-      toast.success("Ad spend updated!");
+      queryClient.invalidateQueries({ queryKey: ["monthly-overrides"] });
+      setMonthlyEditOpen(false);
+      toast.success("Monthly totals saved!");
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const deleteAdMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("ad_daily_data").delete().eq("id", id);
+  const clearOverrideMutation = useMutation({
+    mutationFn: async (month: string) => {
+      const existing = overridesData?.find((o) => o.month === month);
+      if (!existing) return;
+      const { error } = await supabase.from("monthly_overrides").delete().eq("id", existing.id);
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["ad-data-all"] });
-      queryClient.invalidateQueries({ queryKey: ["ad-daily"] });
-      toast.success("Ad entry deleted!");
+      queryClient.invalidateQueries({ queryKey: ["monthly-overrides"] });
+      toast.success("Monthly override cleared — using daily data");
     },
     onError: (e: Error) => toast.error(e.message),
   });
