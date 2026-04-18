@@ -564,7 +564,7 @@ export default function MonthlyOverview() {
       <Card>
         <CardHeader>
           <CardTitle className="text-sm">Monthly Profit & Loss</CardTitle>
-          <p className="text-xs text-muted-foreground">Click a month row to view & edit sales/expenses</p>
+          <p className="text-xs text-muted-foreground">Click a month to expand details. Use the edit icon to override monthly totals.</p>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -581,6 +581,7 @@ export default function MonthlyOverview() {
                   <TableHead>GST Payable</TableHead>
                   <TableHead>Net Profit</TableHead>
                   <TableHead>ROAS</TableHead>
+                  <TableHead className="text-right">Edit</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -596,7 +597,10 @@ export default function MonthlyOverview() {
                         <TableCell className="w-8">
                           {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
                         </TableCell>
-                        <TableCell className="font-medium">{m.month}</TableCell>
+                        <TableCell className="font-medium">
+                          {m.month}
+                          {m.hasOverride && <span className="ml-1 text-[9px] text-amber-500">(override)</span>}
+                        </TableCell>
                         <TableCell className="font-medium">{m.totalSalesCount}</TableCell>
                         <TableCell className="text-green-600">{formatINR(m.totalRevenue)}</TableCell>
                         <TableCell className="text-destructive">{formatINR(m.spendWithGst)}</TableCell>
@@ -607,36 +611,36 @@ export default function MonthlyOverview() {
                           {formatINR(m.netProfit)}
                         </TableCell>
                         <TableCell className="text-primary font-medium">{m.roas.toFixed(2)}x</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); openEditMonthly(m); }} title="Edit monthly totals">
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            {m.hasOverride && (
+                              <Button size="icon" variant="ghost" className="h-7 w-7 text-amber-500" onClick={(e) => { e.stopPropagation(); clearOverrideMutation.mutate(m.month); }} title="Clear override (use daily data)">
+                                <RotateCcw className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
                       </TableRow>
 
-                      {/* Expanded detail row */}
+                      {/* Expanded detail row — read-only listings */}
                       {isExpanded && (
                         <TableRow key={`${m.month}-detail`}>
-                          <TableCell colSpan={10} className="bg-muted/30 p-4">
+                          <TableCell colSpan={11} className="bg-muted/30 p-4">
                             <div className="space-y-4">
-                              {/* Ad Spend entries for this month */}
+                              {/* Ad Spend entries (read-only) */}
                               <div>
-                                <div className="flex items-center justify-between mb-2">
-                                  <h4 className="text-xs font-bold">📢 Ad Spend Entries</h4>
-                                </div>
+                                <h4 className="text-xs font-bold mb-2">📢 Ad Spend Entries</h4>
                                 {m.monthAdData.length > 0 ? (
                                   <div className="space-y-1">
                                     {m.monthAdData.map((ad) => (
-                                      <div key={ad.id} className="flex items-center justify-between bg-background rounded px-3 py-2 text-xs border">
-                                        <div className="flex items-center gap-4">
-                                          <span className="font-medium">{ad.date}</span>
-                                          <span className="text-destructive font-bold">{formatINR(Number(ad.ad_spend))}</span>
-                                          <span className="text-muted-foreground">+18% GST = {formatINR(Number(ad.ad_spend) * 1.18)}</span>
-                                          {ad.is_manual_override && <span className="text-amber-500 text-[10px]">(manual)</span>}
-                                        </div>
-                                        <div className="flex items-center gap-1">
-                                          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); openEditAd(ad); }}>
-                                            <Pencil className="h-3 w-3" />
-                                          </Button>
-                                          <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive" onClick={(e) => { e.stopPropagation(); deleteAdMutation.mutate(ad.id); }}>
-                                            <Trash2 className="h-3 w-3" />
-                                          </Button>
-                                        </div>
+                                      <div key={ad.id} className="flex items-center gap-4 bg-background rounded px-3 py-2 text-xs border">
+                                        <span className="font-medium">{ad.date}</span>
+                                        <span className="text-destructive font-bold">{formatINR(Number(ad.ad_spend))}</span>
+                                        <span className="text-muted-foreground">+18% GST = {formatINR(Number(ad.ad_spend) * 1.18)}</span>
+                                        {ad.is_manual_override && <span className="text-amber-500 text-[10px]">(manual)</span>}
                                       </div>
                                     ))}
                                   </div>
@@ -644,34 +648,19 @@ export default function MonthlyOverview() {
                                   <p className="text-xs text-muted-foreground">No ad spend data for this month</p>
                                 )}
                               </div>
-                              {/* Sales entries for this month */}
+                              {/* Sales entries (read-only) */}
                               <div>
-                                <div className="flex items-center justify-between mb-2">
-                                  <h4 className="text-xs font-bold">📦 Sales Entries</h4>
-                                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); openAddSales(m.month); }}>
-                                    <Plus className="h-3 w-3 mr-1" /> Add Sales
-                                  </Button>
-                                </div>
+                                <h4 className="text-xs font-bold mb-2">📦 Sales Entries</h4>
                                 {m.monthSales.length > 0 ? (
                                   <div className="space-y-1">
                                     {m.monthSales.map((s) => (
-                                      <div key={s.id} className="flex items-center justify-between bg-background rounded px-3 py-2 text-xs border">
-                                        <div className="flex items-center gap-4">
-                                          <span className="font-medium">{s.date}</span>
-                                          <span>Qty: <strong>{s.quantity}</strong></span>
-                                          {s.gpay_quantity > 0 && <span className="text-green-600">GPay: {s.gpay_quantity}</span>}
-                                          {s.usd_quantity > 0 && <span className="text-blue-600">USD: {s.usd_quantity}</span>}
-                                          {s.eur_quantity > 0 && <span className="text-purple-600">EUR: {s.eur_quantity}</span>}
-                                          <span className="text-green-600 font-bold">{formatINR(Number(s.total_amount))}</span>
-                                        </div>
-                                        <div className="flex items-center gap-1">
-                                          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); openEditSales(s); }}>
-                                            <Pencil className="h-3 w-3" />
-                                          </Button>
-                                          <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive" onClick={(e) => { e.stopPropagation(); deleteSalesMutation.mutate(s.id); }}>
-                                            <Trash2 className="h-3 w-3" />
-                                          </Button>
-                                        </div>
+                                      <div key={s.id} className="flex items-center gap-4 bg-background rounded px-3 py-2 text-xs border">
+                                        <span className="font-medium">{s.date}</span>
+                                        <span>Qty: <strong>{s.quantity}</strong></span>
+                                        {s.gpay_quantity > 0 && <span className="text-green-600">GPay: {s.gpay_quantity}</span>}
+                                        {s.usd_quantity > 0 && <span className="text-blue-600">USD: {s.usd_quantity}</span>}
+                                        {s.eur_quantity > 0 && <span className="text-purple-600">EUR: {s.eur_quantity}</span>}
+                                        <span className="text-green-600 font-bold">{formatINR(Number(s.total_amount))}</span>
                                       </div>
                                     ))}
                                   </div>
@@ -680,31 +669,16 @@ export default function MonthlyOverview() {
                                 )}
                               </div>
 
-                              {/* Expenses for this month */}
+                              {/* Expenses (read-only) */}
                               <div>
-                                <div className="flex items-center justify-between mb-2">
-                                  <h4 className="text-xs font-bold">🛒 Expenses</h4>
-                                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); openAddExpense(m.month); }}>
-                                    <Plus className="h-3 w-3 mr-1" /> Add Expense
-                                  </Button>
-                                </div>
+                                <h4 className="text-xs font-bold mb-2">🛒 Expenses</h4>
                                 {m.monthExpenses.length > 0 ? (
                                   <div className="space-y-1">
                                     {m.monthExpenses.map((exp) => (
-                                      <div key={exp.id} className="flex items-center justify-between bg-background rounded px-3 py-2 text-xs border">
-                                        <div className="flex items-center gap-4">
-                                          <span className="font-medium">{exp.date}</span>
-                                          <span>{exp.description || "—"}</span>
-                                          <span className="text-destructive font-bold">{formatINR(Number(exp.amount))}</span>
-                                        </div>
-                                        <div className="flex items-center gap-1">
-                                          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); openEditExpense(exp); }}>
-                                            <Pencil className="h-3 w-3" />
-                                          </Button>
-                                          <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive" onClick={(e) => { e.stopPropagation(); deleteExpenseMutation.mutate(exp.id); }}>
-                                            <Trash2 className="h-3 w-3" />
-                                          </Button>
-                                        </div>
+                                      <div key={exp.id} className="flex items-center gap-4 bg-background rounded px-3 py-2 text-xs border">
+                                        <span className="font-medium">{exp.date}</span>
+                                        <span>{exp.description || "—"}</span>
+                                        <span className="text-destructive font-bold">{formatINR(Number(exp.amount))}</span>
                                       </div>
                                     ))}
                                   </div>
@@ -712,6 +686,10 @@ export default function MonthlyOverview() {
                                   <p className="text-xs text-muted-foreground">No expenses for this month</p>
                                 )}
                               </div>
+
+                              <p className="text-[10px] text-muted-foreground italic">
+                                Daily entries are managed on the Daily Data page. Use the Edit button on the month row to override monthly totals here.
+                              </p>
                             </div>
                           </TableCell>
                         </TableRow>
