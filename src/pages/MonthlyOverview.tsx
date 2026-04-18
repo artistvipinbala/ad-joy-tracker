@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { formatINR, formatNumber, formatPercent } from "@/lib/format";
 import {
   TrendingUp, TrendingDown, IndianRupee, ShoppingCart, Wallet, Target, Percent,
-  Pencil, Trash2, Plus, ChevronDown, ChevronRight,
+  Pencil, ChevronDown, ChevronRight, RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import ProfitBreakdown from "@/components/ProfitBreakdown";
