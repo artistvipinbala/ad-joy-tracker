@@ -81,6 +81,14 @@ export default function MonthlyOverview() {
     },
   });
 
+  const { data: overridesData } = useQuery({
+    queryKey: ["monthly-overrides"],
+    queryFn: async () => {
+      const { data } = await supabase.from("monthly_overrides").select("*");
+      return data ?? [];
+    },
+  });
+
   // Realtime sync
   useEffect(() => {
     const channel = supabase
