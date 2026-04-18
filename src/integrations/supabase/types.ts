@@ -214,6 +214,42 @@ export type Database = {
           },
         ]
       }
+      monthly_overrides: {
+        Row: {
+          ad_spend: number | null
+          created_at: string
+          id: string
+          month: string
+          notes: string | null
+          total_expenses: number | null
+          total_revenue: number | null
+          total_sales_count: number | null
+          updated_at: string
+        }
+        Insert: {
+          ad_spend?: number | null
+          created_at?: string
+          id?: string
+          month: string
+          notes?: string | null
+          total_expenses?: number | null
+          total_revenue?: number | null
+          total_sales_count?: number | null
+          updated_at?: string
+        }
+        Update: {
+          ad_spend?: number | null
+          created_at?: string
+          id?: string
+          month?: string
+          notes?: string | null
+          total_expenses?: number | null
+          total_revenue?: number | null
+          total_sales_count?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       product_config: {
         Row: {
           created_at: string
