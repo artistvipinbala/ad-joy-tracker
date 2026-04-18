@@ -302,17 +302,27 @@ export default function MonthlyOverview() {
     setExpenseDialogOpen(true);
   };
 
-  const openEditAd = (entry: any) => {
-    setAdEditId(entry.id);
-    setAdDate(entry.date);
-    setAdSpend(String(entry.ad_spend));
-    setAdDialogOpen(true);
+  const openEditMonthly = (m: any) => {
+    setEditMonth(m.month);
+    setEditSalesCount(String(m.totalSalesCount ?? ""));
+    setEditRevenue(String(Number(m.totalRevenue ?? 0).toFixed(2)));
+    setEditAdSpendRaw(String(Number(m.ad_spend ?? 0).toFixed(2)));
+    setEditExpensesTotal(String(Number(m.totalExpenses ?? 0).toFixed(2)));
+    setMonthlyEditOpen(true);
   };
 
-  const handleSaveAd = () => {
-    const spend = Number(adSpend);
-    if (spend < 0 || !adEditId) { toast.error("Invalid ad spend value"); return; }
-    adSpendMutation.mutate({ id: adEditId, date: adDate, ad_spend: spend });
+  const handleSaveMonthly = () => {
+    const sc = editSalesCount === "" ? null : Number(editSalesCount);
+    const rev = editRevenue === "" ? null : Number(editRevenue);
+    const ad = editAdSpendRaw === "" ? null : Number(editAdSpendRaw);
+    const exp = editExpensesTotal === "" ? null : Number(editExpensesTotal);
+    overrideMutation.mutate({
+      month: editMonth,
+      total_sales_count: sc,
+      total_revenue: rev,
+      ad_spend: ad,
+      total_expenses: exp,
+    });
   };
 
   const handleSaveSales = () => {
