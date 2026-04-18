@@ -697,7 +697,7 @@ export default function MonthlyOverview() {
                     </>
                   );
                 }) : (
-                  <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">No data</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={11} className="text-center py-8 text-muted-foreground">No data</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
