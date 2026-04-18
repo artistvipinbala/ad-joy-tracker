@@ -829,24 +829,39 @@ export default function MonthlyOverview() {
         </DialogContent>
       </Dialog>
 
-      {/* Ad Spend Edit Dialog */}
-      <Dialog open={adDialogOpen} onOpenChange={setAdDialogOpen}>
-        <DialogContent className="max-w-sm" onClick={(e) => e.stopPropagation()}>
+      {/* Monthly Override Edit Dialog */}
+      <Dialog open={monthlyEditOpen} onOpenChange={setMonthlyEditOpen}>
+        <DialogContent className="max-w-md" onClick={(e) => e.stopPropagation()}>
           <DialogHeader>
-            <DialogTitle>Edit Ad Spend</DialogTitle>
+            <DialogTitle>Edit Monthly Totals — {editMonth}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <div>
-              <Label>Date</Label>
-              <Input type="date" value={adDate} disabled />
+            <p className="text-xs text-muted-foreground">
+              Override the aggregated values for this month. Leave a field blank to fall back to daily data.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Total Sales (qty)</Label>
+                <Input type="number" value={editSalesCount} onChange={(e) => setEditSalesCount(e.target.value)} placeholder="auto" />
+              </div>
+              <div>
+                <Label>Total Revenue (₹)</Label>
+                <Input type="number" value={editRevenue} onChange={(e) => setEditRevenue(e.target.value)} placeholder="auto" />
+              </div>
             </div>
-            <div>
-              <Label>Ad Spend (₹) — excl. GST</Label>
-              <Input type="number" value={adSpend} onChange={(e) => setAdSpend(e.target.value)} placeholder="0" />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Ad Spend (₹) — excl. GST</Label>
+                <Input type="number" value={editAdSpendRaw} onChange={(e) => setEditAdSpendRaw(e.target.value)} placeholder="auto" />
+                <p className="text-[10px] text-muted-foreground mt-1">With 18% GST: {formatINR(Number(editAdSpendRaw || 0) * 1.18)}</p>
+              </div>
+              <div>
+                <Label>Total Expenses (₹)</Label>
+                <Input type="number" value={editExpensesTotal} onChange={(e) => setEditExpensesTotal(e.target.value)} placeholder="auto" />
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground">With 18% GST: {formatINR(Number(adSpend || 0) * 1.18)}</p>
-            <Button onClick={handleSaveAd} className="w-full" disabled={adSpendMutation.isPending}>
-              {adSpendMutation.isPending ? "Saving..." : "Save Ad Spend"}
+            <Button onClick={handleSaveMonthly} className="w-full" disabled={overrideMutation.isPending}>
+              {overrideMutation.isPending ? "Saving..." : "Save Monthly Totals"}
             </Button>
           </div>
         </DialogContent>
