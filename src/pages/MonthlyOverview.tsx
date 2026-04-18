@@ -41,11 +41,13 @@ export default function MonthlyOverview() {
   const [expenseDesc, setExpenseDesc] = useState("");
   const [editExpenseId, setEditExpenseId] = useState<string | null>(null);
 
-  // Ad spend dialog state
-  const [adDialogOpen, setAdDialogOpen] = useState(false);
-  const [adEditId, setAdEditId] = useState<string | null>(null);
-  const [adDate, setAdDate] = useState("");
-  const [adSpend, setAdSpend] = useState("");
+  // Monthly override dialog state
+  const [monthlyEditOpen, setMonthlyEditOpen] = useState(false);
+  const [editMonth, setEditMonth] = useState("");
+  const [editSalesCount, setEditSalesCount] = useState("");
+  const [editRevenue, setEditRevenue] = useState("");
+  const [editAdSpendRaw, setEditAdSpendRaw] = useState("");
+  const [editExpensesTotal, setEditExpensesTotal] = useState("");
 
   const { data: productConfig } = useQuery({
     queryKey: ["product-config"],
