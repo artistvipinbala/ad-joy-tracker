@@ -102,6 +102,9 @@ export default function MonthlyOverview() {
       .on("postgres_changes", { event: "*", schema: "public", table: "expenses" }, () => {
         queryClient.invalidateQueries({ queryKey: ["expenses-all"] });
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "monthly_overrides" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["monthly-overrides"] });
+      })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [queryClient]);
