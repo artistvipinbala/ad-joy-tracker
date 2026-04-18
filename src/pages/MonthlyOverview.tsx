@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { formatINR, formatNumber, formatPercent } from "@/lib/format";
 import {
   TrendingUp, TrendingDown, IndianRupee, ShoppingCart, Wallet, Target, Percent,
-  Pencil, Trash2, Plus, ChevronDown, ChevronRight,
+  Pencil, ChevronDown, ChevronRight, RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import ProfitBreakdown from "@/components/ProfitBreakdown";
@@ -41,11 +41,13 @@ export default function MonthlyOverview() {
   const [expenseDesc, setExpenseDesc] = useState("");
   const [editExpenseId, setEditExpenseId] = useState<string | null>(null);
 
-  // Ad spend dialog state
-  const [adDialogOpen, setAdDialogOpen] = useState(false);
-  const [adEditId, setAdEditId] = useState<string | null>(null);
-  const [adDate, setAdDate] = useState("");
-  const [adSpend, setAdSpend] = useState("");
+  // Monthly override dialog state
+  const [monthlyEditOpen, setMonthlyEditOpen] = useState(false);
+  const [editMonth, setEditMonth] = useState("");
+  const [editSalesCount, setEditSalesCount] = useState("");
+  const [editRevenue, setEditRevenue] = useState("");
+  const [editAdSpendRaw, setEditAdSpendRaw] = useState("");
+  const [editExpensesTotal, setEditExpensesTotal] = useState("");
 
   const { data: productConfig } = useQuery({
     queryKey: ["product-config"],
@@ -79,6 +81,14 @@ export default function MonthlyOverview() {
     },
   });
 
+  const { data: overridesData } = useQuery({
+    queryKey: ["monthly-overrides"],
+    queryFn: async () => {
+      const { data } = await supabase.from("monthly_overrides").select("*");
+      return data ?? [];
+    },
+  });
+
   // Realtime sync
   useEffect(() => {
     const channel = supabase
@@ -91,6 +101,9 @@ export default function MonthlyOverview() {
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "expenses" }, () => {
         queryClient.invalidateQueries({ queryKey: ["expenses-all"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "monthly_overrides" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["monthly-overrides"] });
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
@@ -187,29 +200,52 @@ export default function MonthlyOverview() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const adSpendMutation = useMutation({
-    mutationFn: async (params: { id: string; date: string; ad_spend: number }) => {
-      const { error } = await supabase.from("ad_daily_data").update({ ad_spend: params.ad_spend, is_manual_override: true }).eq("id", params.id);
-      if (error) throw error;
+  const overrideMutation = useMutation({
+    mutationFn: async (params: {
+      month: string;
+      total_sales_count: number | null;
+      total_revenue: number | null;
+      ad_spend: number | null;
+      total_expenses: number | null;
+    }) => {
+      const existing = overridesData?.find((o) => o.month === params.month);
+      if (existing) {
+        const { error } = await supabase.from("monthly_overrides").update({
+          total_sales_count: params.total_sales_count,
+          total_revenue: params.total_revenue,
+          ad_spend: params.ad_spend,
+          total_expenses: params.total_expenses,
+        }).eq("id", existing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("monthly_overrides").insert({
+          month: params.month,
+          total_sales_count: params.total_sales_count,
+          total_revenue: params.total_revenue,
+          ad_spend: params.ad_spend,
+          total_expenses: params.total_expenses,
+        });
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["ad-data-all"] });
-      queryClient.invalidateQueries({ queryKey: ["ad-daily"] });
-      setAdDialogOpen(false);
-      toast.success("Ad spend updated!");
+      queryClient.invalidateQueries({ queryKey: ["monthly-overrides"] });
+      setMonthlyEditOpen(false);
+      toast.success("Monthly totals saved!");
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const deleteAdMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("ad_daily_data").delete().eq("id", id);
+  const clearOverrideMutation = useMutation({
+    mutationFn: async (month: string) => {
+      const existing = overridesData?.find((o) => o.month === month);
+      if (!existing) return;
+      const { error } = await supabase.from("monthly_overrides").delete().eq("id", existing.id);
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["ad-data-all"] });
-      queryClient.invalidateQueries({ queryKey: ["ad-daily"] });
-      toast.success("Ad entry deleted!");
+      queryClient.invalidateQueries({ queryKey: ["monthly-overrides"] });
+      toast.success("Monthly override cleared — using daily data");
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -266,17 +302,27 @@ export default function MonthlyOverview() {
     setExpenseDialogOpen(true);
   };
 
-  const openEditAd = (entry: any) => {
-    setAdEditId(entry.id);
-    setAdDate(entry.date);
-    setAdSpend(String(entry.ad_spend));
-    setAdDialogOpen(true);
+  const openEditMonthly = (m: any) => {
+    setEditMonth(m.month);
+    setEditSalesCount(String(m.totalSalesCount ?? ""));
+    setEditRevenue(String(Number(m.totalRevenue ?? 0).toFixed(2)));
+    setEditAdSpendRaw(String(Number(m.ad_spend ?? 0).toFixed(2)));
+    setEditExpensesTotal(String(Number(m.totalExpenses ?? 0).toFixed(2)));
+    setMonthlyEditOpen(true);
   };
 
-  const handleSaveAd = () => {
-    const spend = Number(adSpend);
-    if (spend < 0 || !adEditId) { toast.error("Invalid ad spend value"); return; }
-    adSpendMutation.mutate({ id: adEditId, date: adDate, ad_spend: spend });
+  const handleSaveMonthly = () => {
+    const sc = editSalesCount === "" ? null : Number(editSalesCount);
+    const rev = editRevenue === "" ? null : Number(editRevenue);
+    const ad = editAdSpendRaw === "" ? null : Number(editAdSpendRaw);
+    const exp = editExpensesTotal === "" ? null : Number(editExpensesTotal);
+    overrideMutation.mutate({
+      month: editMonth,
+      total_sales_count: sc,
+      total_revenue: rev,
+      ad_spend: ad,
+      total_expenses: exp,
+    });
   };
 
   const handleSaveSales = () => {
@@ -360,54 +406,64 @@ export default function MonthlyOverview() {
     avg_cpr: m.conversions > 0 ? m.ad_spend / m.conversions : 0,
   })).sort((a, b) => b.month.localeCompare(a.month));
 
-  // Monthly P&L
+  // Monthly P&L (with overrides applied)
   const monthlyPL = monthlyRows.map((m) => {
     const monthSales = salesData?.filter((s) => s.date.substring(0, 7) === m.month) ?? [];
     const monthExpenses = expensesData?.filter((e) => e.date.substring(0, 7) === m.month) ?? [];
     const monthAdData = adData?.filter((a) => a.date.substring(0, 7) === m.month) ?? [];
+    const override = overridesData?.find((o) => o.month === m.month);
 
-    const totalSalesCount = monthSales.reduce((s, r) => s + r.quantity, 0);
+    const baseTotalSalesCount = monthSales.reduce((s, r) => s + r.quantity, 0);
     const totalGpayCount = monthSales.reduce((s, r) => s + (r.gpay_quantity ?? 0), 0);
     const totalUsdCount = monthSales.reduce((s, r) => s + (r.usd_quantity ?? 0), 0);
     const totalEurCount = monthSales.reduce((s, r) => s + (r.eur_quantity ?? 0), 0);
-    const platformCount = totalSalesCount - totalGpayCount - totalUsdCount - totalEurCount;
 
-    const totalRevenue = monthSales.reduce((s, r) => s + Number(r.total_amount), 0);
+    const baseRevenue = monthSales.reduce((s, r) => s + Number(r.total_amount), 0);
     const totalGST = monthSales.reduce((s, r) => s + Number(r.gst_collected), 0);
     const usdAmountTotal = monthSales.reduce((s, r) => s + Number(r.usd_amount_inr ?? 0), 0);
     const eurAmountTotal = monthSales.reduce((s, r) => s + Number(r.eur_amount_inr ?? 0), 0);
-    const totalExpenses = monthExpenses.reduce((s, r) => s + Number(r.amount), 0);
+    const baseExpenses = monthExpenses.reduce((s, r) => s + Number(r.amount), 0);
+    const baseAdSpendRaw = m.ad_spend;
 
-    const adGst = m.ad_spend * 0.18;
-    const spendWithGst = m.ad_spend + adGst;
-    const commissionDeduction = platformCount * amountPerSale * COMMISSION_RATE + (usdAmountTotal + eurAmountTotal) * COMMISSION_RATE;
+    // Apply overrides if present (null = no override)
+    const totalSalesCount = override?.total_sales_count != null ? Number(override.total_sales_count) : baseTotalSalesCount;
+    const totalRevenue = override?.total_revenue != null ? Number(override.total_revenue) : baseRevenue;
+    const adSpendRaw = override?.ad_spend != null ? Number(override.ad_spend) : baseAdSpendRaw;
+    const totalExpenses = override?.total_expenses != null ? Number(override.total_expenses) : baseExpenses;
+    const platformCount = totalSalesCount - totalGpayCount - totalUsdCount - totalEurCount;
+
+    const adGst = adSpendRaw * 0.18;
+    const spendWithGst = adSpendRaw + adGst;
+    const commissionDeduction = Math.max(0, platformCount) * amountPerSale * COMMISSION_RATE + (usdAmountTotal + eurAmountTotal) * COMMISSION_RATE;
     const gstPayable = totalGST - adGst;
     const netProfit = totalRevenue - commissionDeduction - spendWithGst - totalExpenses - gstPayable;
     const roas = spendWithGst > 0 ? totalRevenue / spendWithGst : 0;
 
     return {
-      ...m, totalSalesCount, totalGpayCount, totalUsdCount, totalEurCount, platformCount,
+      ...m, ad_spend: adSpendRaw,
+      totalSalesCount, totalGpayCount, totalUsdCount, totalEurCount, platformCount,
       totalRevenue, totalGST, usdAmountTotal, eurAmountTotal, totalExpenses,
       adGst, spendWithGst, commissionDeduction, gstPayable, netProfit, roas,
       monthSales, monthExpenses, monthAdData,
+      hasOverride: !!override,
     };
   });
 
-  // All-time totals
-  const allTimeSpendRaw = adData?.reduce((s, r) => s + Number(r.ad_spend), 0) ?? 0;
+  // All-time totals (aggregated from monthlyPL so overrides are respected)
+  const allTimeSpendRaw = monthlyPL.reduce((s, r) => s + r.ad_spend, 0);
   const allTimeAdGst = allTimeSpendRaw * 0.18;
   const allTimeSpendWithGst = allTimeSpendRaw + allTimeAdGst;
-  const allTimeSalesCount = salesData?.reduce((s, r) => s + r.quantity, 0) ?? 0;
+  const allTimeSalesCount = monthlyPL.reduce((s, r) => s + r.totalSalesCount, 0);
   const allTimeGpay = salesData?.reduce((s, r) => s + (r.gpay_quantity ?? 0), 0) ?? 0;
   const allTimeUsd = salesData?.reduce((s, r) => s + (r.usd_quantity ?? 0), 0) ?? 0;
   const allTimeEur = salesData?.reduce((s, r) => s + (r.eur_quantity ?? 0), 0) ?? 0;
   const allTimePlatform = allTimeSalesCount - allTimeGpay - allTimeUsd - allTimeEur;
-  const allTimeRevenue = salesData?.reduce((s, r) => s + Number(r.total_amount), 0) ?? 0;
-  const allTimeGST = salesData?.reduce((s, r) => s + Number(r.gst_collected), 0) ?? 0;
+  const allTimeRevenue = monthlyPL.reduce((s, r) => s + r.totalRevenue, 0);
+  const allTimeGST = monthlyPL.reduce((s, r) => s + r.totalGST, 0);
   const allTimeUsdInr = salesData?.reduce((s, r) => s + Number(r.usd_amount_inr ?? 0), 0) ?? 0;
   const allTimeEurInr = salesData?.reduce((s, r) => s + Number(r.eur_amount_inr ?? 0), 0) ?? 0;
-  const allTimeExpenses = expensesData?.reduce((s, r) => s + Number(r.amount), 0) ?? 0;
-  const allTimeCommission = allTimePlatform * amountPerSale * COMMISSION_RATE + (allTimeUsdInr + allTimeEurInr) * COMMISSION_RATE;
+  const allTimeExpenses = monthlyPL.reduce((s, r) => s + r.totalExpenses, 0);
+  const allTimeCommission = monthlyPL.reduce((s, r) => s + r.commissionDeduction, 0);
   const allTimeGstPayable = allTimeGST - allTimeAdGst;
   const allTimeNetProfit = allTimeRevenue - allTimeCommission - allTimeSpendWithGst - allTimeExpenses - allTimeGstPayable;
   const allTimeRoas = allTimeSpendWithGst > 0 ? allTimeRevenue / allTimeSpendWithGst : 0;
@@ -508,7 +564,7 @@ export default function MonthlyOverview() {
       <Card>
         <CardHeader>
           <CardTitle className="text-sm">Monthly Profit & Loss</CardTitle>
-          <p className="text-xs text-muted-foreground">Click a month row to view & edit sales/expenses</p>
+          <p className="text-xs text-muted-foreground">Click a month to expand details. Use the edit icon to override monthly totals.</p>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -525,6 +581,7 @@ export default function MonthlyOverview() {
                   <TableHead>GST Payable</TableHead>
                   <TableHead>Net Profit</TableHead>
                   <TableHead>ROAS</TableHead>
+                  <TableHead className="text-right">Edit</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -540,7 +597,10 @@ export default function MonthlyOverview() {
                         <TableCell className="w-8">
                           {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
                         </TableCell>
-                        <TableCell className="font-medium">{m.month}</TableCell>
+                        <TableCell className="font-medium">
+                          {m.month}
+                          {m.hasOverride && <span className="ml-1 text-[9px] text-amber-500">(override)</span>}
+                        </TableCell>
                         <TableCell className="font-medium">{m.totalSalesCount}</TableCell>
                         <TableCell className="text-green-600">{formatINR(m.totalRevenue)}</TableCell>
                         <TableCell className="text-destructive">{formatINR(m.spendWithGst)}</TableCell>
@@ -551,36 +611,36 @@ export default function MonthlyOverview() {
                           {formatINR(m.netProfit)}
                         </TableCell>
                         <TableCell className="text-primary font-medium">{m.roas.toFixed(2)}x</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); openEditMonthly(m); }} title="Edit monthly totals">
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            {m.hasOverride && (
+                              <Button size="icon" variant="ghost" className="h-7 w-7 text-amber-500" onClick={(e) => { e.stopPropagation(); clearOverrideMutation.mutate(m.month); }} title="Clear override (use daily data)">
+                                <RotateCcw className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
                       </TableRow>
 
-                      {/* Expanded detail row */}
+                      {/* Expanded detail row — read-only listings */}
                       {isExpanded && (
                         <TableRow key={`${m.month}-detail`}>
-                          <TableCell colSpan={10} className="bg-muted/30 p-4">
+                          <TableCell colSpan={11} className="bg-muted/30 p-4">
                             <div className="space-y-4">
-                              {/* Ad Spend entries for this month */}
+                              {/* Ad Spend entries (read-only) */}
                               <div>
-                                <div className="flex items-center justify-between mb-2">
-                                  <h4 className="text-xs font-bold">📢 Ad Spend Entries</h4>
-                                </div>
+                                <h4 className="text-xs font-bold mb-2">📢 Ad Spend Entries</h4>
                                 {m.monthAdData.length > 0 ? (
                                   <div className="space-y-1">
                                     {m.monthAdData.map((ad) => (
-                                      <div key={ad.id} className="flex items-center justify-between bg-background rounded px-3 py-2 text-xs border">
-                                        <div className="flex items-center gap-4">
-                                          <span className="font-medium">{ad.date}</span>
-                                          <span className="text-destructive font-bold">{formatINR(Number(ad.ad_spend))}</span>
-                                          <span className="text-muted-foreground">+18% GST = {formatINR(Number(ad.ad_spend) * 1.18)}</span>
-                                          {ad.is_manual_override && <span className="text-amber-500 text-[10px]">(manual)</span>}
-                                        </div>
-                                        <div className="flex items-center gap-1">
-                                          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); openEditAd(ad); }}>
-                                            <Pencil className="h-3 w-3" />
-                                          </Button>
-                                          <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive" onClick={(e) => { e.stopPropagation(); deleteAdMutation.mutate(ad.id); }}>
-                                            <Trash2 className="h-3 w-3" />
-                                          </Button>
-                                        </div>
+                                      <div key={ad.id} className="flex items-center gap-4 bg-background rounded px-3 py-2 text-xs border">
+                                        <span className="font-medium">{ad.date}</span>
+                                        <span className="text-destructive font-bold">{formatINR(Number(ad.ad_spend))}</span>
+                                        <span className="text-muted-foreground">+18% GST = {formatINR(Number(ad.ad_spend) * 1.18)}</span>
+                                        {ad.is_manual_override && <span className="text-amber-500 text-[10px]">(manual)</span>}
                                       </div>
                                     ))}
                                   </div>
@@ -588,34 +648,19 @@ export default function MonthlyOverview() {
                                   <p className="text-xs text-muted-foreground">No ad spend data for this month</p>
                                 )}
                               </div>
-                              {/* Sales entries for this month */}
+                              {/* Sales entries (read-only) */}
                               <div>
-                                <div className="flex items-center justify-between mb-2">
-                                  <h4 className="text-xs font-bold">📦 Sales Entries</h4>
-                                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); openAddSales(m.month); }}>
-                                    <Plus className="h-3 w-3 mr-1" /> Add Sales
-                                  </Button>
-                                </div>
+                                <h4 className="text-xs font-bold mb-2">📦 Sales Entries</h4>
                                 {m.monthSales.length > 0 ? (
                                   <div className="space-y-1">
                                     {m.monthSales.map((s) => (
-                                      <div key={s.id} className="flex items-center justify-between bg-background rounded px-3 py-2 text-xs border">
-                                        <div className="flex items-center gap-4">
-                                          <span className="font-medium">{s.date}</span>
-                                          <span>Qty: <strong>{s.quantity}</strong></span>
-                                          {s.gpay_quantity > 0 && <span className="text-green-600">GPay: {s.gpay_quantity}</span>}
-                                          {s.usd_quantity > 0 && <span className="text-blue-600">USD: {s.usd_quantity}</span>}
-                                          {s.eur_quantity > 0 && <span className="text-purple-600">EUR: {s.eur_quantity}</span>}
-                                          <span className="text-green-600 font-bold">{formatINR(Number(s.total_amount))}</span>
-                                        </div>
-                                        <div className="flex items-center gap-1">
-                                          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); openEditSales(s); }}>
-                                            <Pencil className="h-3 w-3" />
-                                          </Button>
-                                          <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive" onClick={(e) => { e.stopPropagation(); deleteSalesMutation.mutate(s.id); }}>
-                                            <Trash2 className="h-3 w-3" />
-                                          </Button>
-                                        </div>
+                                      <div key={s.id} className="flex items-center gap-4 bg-background rounded px-3 py-2 text-xs border">
+                                        <span className="font-medium">{s.date}</span>
+                                        <span>Qty: <strong>{s.quantity}</strong></span>
+                                        {s.gpay_quantity > 0 && <span className="text-green-600">GPay: {s.gpay_quantity}</span>}
+                                        {s.usd_quantity > 0 && <span className="text-blue-600">USD: {s.usd_quantity}</span>}
+                                        {s.eur_quantity > 0 && <span className="text-purple-600">EUR: {s.eur_quantity}</span>}
+                                        <span className="text-green-600 font-bold">{formatINR(Number(s.total_amount))}</span>
                                       </div>
                                     ))}
                                   </div>
@@ -624,31 +669,16 @@ export default function MonthlyOverview() {
                                 )}
                               </div>
 
-                              {/* Expenses for this month */}
+                              {/* Expenses (read-only) */}
                               <div>
-                                <div className="flex items-center justify-between mb-2">
-                                  <h4 className="text-xs font-bold">🛒 Expenses</h4>
-                                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); openAddExpense(m.month); }}>
-                                    <Plus className="h-3 w-3 mr-1" /> Add Expense
-                                  </Button>
-                                </div>
+                                <h4 className="text-xs font-bold mb-2">🛒 Expenses</h4>
                                 {m.monthExpenses.length > 0 ? (
                                   <div className="space-y-1">
                                     {m.monthExpenses.map((exp) => (
-                                      <div key={exp.id} className="flex items-center justify-between bg-background rounded px-3 py-2 text-xs border">
-                                        <div className="flex items-center gap-4">
-                                          <span className="font-medium">{exp.date}</span>
-                                          <span>{exp.description || "—"}</span>
-                                          <span className="text-destructive font-bold">{formatINR(Number(exp.amount))}</span>
-                                        </div>
-                                        <div className="flex items-center gap-1">
-                                          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); openEditExpense(exp); }}>
-                                            <Pencil className="h-3 w-3" />
-                                          </Button>
-                                          <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive" onClick={(e) => { e.stopPropagation(); deleteExpenseMutation.mutate(exp.id); }}>
-                                            <Trash2 className="h-3 w-3" />
-                                          </Button>
-                                        </div>
+                                      <div key={exp.id} className="flex items-center gap-4 bg-background rounded px-3 py-2 text-xs border">
+                                        <span className="font-medium">{exp.date}</span>
+                                        <span>{exp.description || "—"}</span>
+                                        <span className="text-destructive font-bold">{formatINR(Number(exp.amount))}</span>
                                       </div>
                                     ))}
                                   </div>
@@ -656,6 +686,10 @@ export default function MonthlyOverview() {
                                   <p className="text-xs text-muted-foreground">No expenses for this month</p>
                                 )}
                               </div>
+
+                              <p className="text-[10px] text-muted-foreground italic">
+                                Daily entries are managed on the Daily Data page. Use the Edit button on the month row to override monthly totals here.
+                              </p>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -663,7 +697,7 @@ export default function MonthlyOverview() {
                     </>
                   );
                 }) : (
-                  <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">No data</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={11} className="text-center py-8 text-muted-foreground">No data</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
@@ -795,24 +829,39 @@ export default function MonthlyOverview() {
         </DialogContent>
       </Dialog>
 
-      {/* Ad Spend Edit Dialog */}
-      <Dialog open={adDialogOpen} onOpenChange={setAdDialogOpen}>
-        <DialogContent className="max-w-sm" onClick={(e) => e.stopPropagation()}>
+      {/* Monthly Override Edit Dialog */}
+      <Dialog open={monthlyEditOpen} onOpenChange={setMonthlyEditOpen}>
+        <DialogContent className="max-w-md" onClick={(e) => e.stopPropagation()}>
           <DialogHeader>
-            <DialogTitle>Edit Ad Spend</DialogTitle>
+            <DialogTitle>Edit Monthly Totals — {editMonth}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <div>
-              <Label>Date</Label>
-              <Input type="date" value={adDate} disabled />
+            <p className="text-xs text-muted-foreground">
+              Override the aggregated values for this month. Leave a field blank to fall back to daily data.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Total Sales (qty)</Label>
+                <Input type="number" value={editSalesCount} onChange={(e) => setEditSalesCount(e.target.value)} placeholder="auto" />
+              </div>
+              <div>
+                <Label>Total Revenue (₹)</Label>
+                <Input type="number" value={editRevenue} onChange={(e) => setEditRevenue(e.target.value)} placeholder="auto" />
+              </div>
             </div>
-            <div>
-              <Label>Ad Spend (₹) — excl. GST</Label>
-              <Input type="number" value={adSpend} onChange={(e) => setAdSpend(e.target.value)} placeholder="0" />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Ad Spend (₹) — excl. GST</Label>
+                <Input type="number" value={editAdSpendRaw} onChange={(e) => setEditAdSpendRaw(e.target.value)} placeholder="auto" />
+                <p className="text-[10px] text-muted-foreground mt-1">With 18% GST: {formatINR(Number(editAdSpendRaw || 0) * 1.18)}</p>
+              </div>
+              <div>
+                <Label>Total Expenses (₹)</Label>
+                <Input type="number" value={editExpensesTotal} onChange={(e) => setEditExpensesTotal(e.target.value)} placeholder="auto" />
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground">With 18% GST: {formatINR(Number(adSpend || 0) * 1.18)}</p>
-            <Button onClick={handleSaveAd} className="w-full" disabled={adSpendMutation.isPending}>
-              {adSpendMutation.isPending ? "Saving..." : "Save Ad Spend"}
+            <Button onClick={handleSaveMonthly} className="w-full" disabled={overrideMutation.isPending}>
+              {overrideMutation.isPending ? "Saving..." : "Save Monthly Totals"}
             </Button>
           </div>
         </DialogContent>
