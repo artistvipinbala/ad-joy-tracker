@@ -701,27 +701,49 @@ export default function DailyData() {
                     <AdMetric label="Conv" value={String(r.conversions)} />
                   </div>
 
-                  {/* Campaign Breakdown Dropdown — hierarchical: Campaign > Ad Sets > Ads */}
+                  {/* Running Ads + AI Advisor side-by-side */}
                   {(() => {
                     const bd = getBreakdownForDate(r.date);
-                    if (bd.campaigns.length === 0) return null;
+                    // Running ads = ad-level rows with spend > 0, deduped by ad_id (keep highest spend)
+                    const runningAds = dedupeBy(
+                      bd.ads.filter((a) => Number(a.spend) > 0),
+                      (a) => a.ad_id || `${a.adset_id}-${a.ad_name}`
+                    ).sort((a, b) => Number(b.spend) - Number(a.spend));
+
+                    if (runningAds.length === 0 && bd.ads.length === 0) return null;
+
                     const isExpanded = expandedDates.has(r.date);
+                    const accountTotals = {
+                      spend: Number(r.ad_spend), impressions: r.impressions, clicks: r.clicks,
+                      ctr: Number(r.ctr), cpc: Number(r.cpc), reach: r.reach,
+                      frequency: Number(r.frequency), conversions: r.conversions,
+                      sales: m.qty, revenue: m.totalRevenue, profit: m.profit, cac: m.cac,
+                    };
+
                     return (
                       <Collapsible open={isExpanded} onOpenChange={() => toggleDate(r.date)} className="mt-3">
                         <CollapsibleTrigger asChild>
                           <Button variant="ghost" size="sm" className="w-full h-8 text-xs gap-1.5 text-muted-foreground hover:text-foreground">
                             {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                             <Megaphone className="h-3 w-3" />
-                            {bd.campaigns.length} Campaigns • {bd.adsets.length} Ad Sets • {bd.ads.length} Ads
+                            {runningAds.length} Running Ads on this day
                           </Button>
                         </CollapsibleTrigger>
-                        <CollapsibleContent className="mt-2 space-y-2">
-                          {bd.campaigns.map((campaign) => {
-                            const campaignAdsets = bd.adsets.filter((a) => a.campaign_id === campaign.campaign_id);
-                            return (
-                              <CampaignTree key={campaign.id} campaign={campaign} adsets={campaignAdsets} ads={bd.ads} />
-                            );
-                          })}
+                        <CollapsibleContent className="mt-2">
+                          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+                            <div className="lg:col-span-2 space-y-1.5 max-h-[500px] overflow-y-auto pr-1">
+                              {runningAds.length === 0 ? (
+                                <p className="text-xs text-muted-foreground text-center py-4">
+                                  No ads were running on this date.
+                                </p>
+                              ) : (
+                                runningAds.map((ad) => <RunningAdRow key={ad.id} ad={ad} />)
+                              )}
+                            </div>
+                            <div className="lg:col-span-1">
+                              <DailyAIAdvisor date={r.date} runningAds={runningAds} accountTotals={accountTotals} />
+                            </div>
+                          </div>
                         </CollapsibleContent>
                       </Collapsible>
                     );
