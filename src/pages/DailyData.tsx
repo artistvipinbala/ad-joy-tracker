@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 const PRICE_PER_SALE = 589;
 const COMMISSION_RATE = 0.025;
@@ -40,29 +41,77 @@ function dedupeBy<T extends Record<string, any>>(rows: T[], keyFn: (r: T) => str
   return Array.from(map.values());
 }
 
-function RunningAdRow({ ad }: { ad: any }) {
+function MetricsRow({ item, indent = 0 }: { item: any; indent?: number }) {
   return (
-    <div className="bg-muted/30 rounded-lg px-3 py-2 border border-border/50 hover:bg-muted/50 transition-colors">
-      <div className="flex items-center justify-between mb-1.5 gap-2">
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          <FileImage className="h-3 w-3 shrink-0 text-primary" />
-          <div className="min-w-0">
-            <p className="text-xs font-medium truncate">{ad.ad_name || "Unknown Ad"}</p>
-            <p className="text-[9px] text-muted-foreground truncate">
-              {ad.campaign_name} {ad.adset_name ? `→ ${ad.adset_name}` : ""}
-            </p>
-          </div>
+    <div className="grid grid-cols-7 gap-x-2 gap-y-0 text-[10px] py-1 px-2" style={{ paddingLeft: `${indent * 12 + 8}px` }}>
+      <div className="text-muted-foreground">Spend <span className="font-semibold text-destructive block">{formatINR(Number(item.spend))}</span></div>
+      <div className="text-muted-foreground">Clicks <span className="font-medium text-foreground block">{item.clicks}</span></div>
+      <div className="text-muted-foreground">CTR <span className="font-medium text-foreground block">{formatPercent(Number(item.ctr))}</span></div>
+      <div className="text-muted-foreground">CPC <span className="font-medium text-foreground block">{formatINR(Number(item.cpc))}</span></div>
+      <div className="text-muted-foreground">CPR <span className="font-medium text-foreground block">{Number(item.cpr) > 0 ? formatINR(Number(item.cpr)) : "—"}</span></div>
+      <div className="text-muted-foreground">Reach <span className="font-medium text-foreground block">{formatNumber(item.reach)}</span></div>
+      <div className="text-muted-foreground">Freq <span className="font-medium text-foreground block">{Number(item.frequency).toFixed(2)}</span></div>
+    </div>
+  );
+}
+
+function HierarchyAdRow({ ad }: { ad: any }) {
+  return (
+    <div className="border-l-2 border-primary/30 ml-6 my-1 bg-background rounded-r">
+      <div className="flex items-center gap-1.5 px-2 py-1 border-b border-border/40">
+        <FileImage className="h-3 w-3 shrink-0 text-primary" />
+        <span className="text-[11px] font-medium truncate flex-1">{ad.ad_name || "Unknown Ad"}</span>
+        <span className="text-[10px] font-bold text-destructive">{formatINR(Number(ad.spend))}</span>
+      </div>
+      <MetricsRow item={ad} indent={1} />
+    </div>
+  );
+}
+
+function HierarchyAdsetRow({ adset, ads }: { adset: any; ads: any[] }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <div className="border-l-2 border-amber-500/40 ml-3 my-1 bg-muted/10 rounded-r">
+      <button onClick={() => setOpen(!open)} className="w-full flex items-center gap-1.5 px-2 py-1 hover:bg-muted/30 transition-colors">
+        {open ? <ChevronDown className="h-3 w-3 text-muted-foreground" /> : <ChevronRight className="h-3 w-3 text-muted-foreground" />}
+        <Layers className="h-3 w-3 text-amber-600" />
+        <span className="text-[11px] font-semibold truncate flex-1 text-left">{adset.adset_name || "Unknown Ad Set"}</span>
+        <Badge variant="outline" className="text-[9px] h-4 px-1">{ads.length} ads</Badge>
+        <span className="text-[10px] font-bold text-destructive">{formatINR(Number(adset.spend))}</span>
+      </button>
+      <MetricsRow item={adset} indent={1} />
+      {open && (
+        <div className="pb-1">
+          {ads.length === 0 ? (
+            <p className="text-[10px] text-muted-foreground px-3 py-1 italic">No active ads</p>
+          ) : ads.map((ad) => <HierarchyAdRow key={ad.id} ad={ad} />)}
         </div>
-        <span className="text-xs font-bold text-destructive shrink-0">{formatINR(Number(ad.spend))}</span>
-      </div>
-      <div className="grid grid-cols-3 md:grid-cols-6 gap-x-3 gap-y-1 text-[10px]">
-        <div><span className="text-muted-foreground">Clicks</span> <span className="font-medium block">{ad.clicks}</span></div>
-        <div><span className="text-muted-foreground">CTR</span> <span className="font-medium block">{formatPercent(Number(ad.ctr))}</span></div>
-        <div><span className="text-muted-foreground">CPC</span> <span className="font-medium block">{formatINR(Number(ad.cpc))}</span></div>
-        <div><span className="text-muted-foreground">CPR</span> <span className="font-medium block">{Number(ad.cpr) > 0 ? formatINR(Number(ad.cpr)) : "—"}</span></div>
-        <div><span className="text-muted-foreground">Reach</span> <span className="font-medium block">{formatNumber(ad.reach)}</span></div>
-        <div><span className="text-muted-foreground">Freq</span> <span className="font-medium block">{Number(ad.frequency).toFixed(2)}</span></div>
-      </div>
+      )}
+    </div>
+  );
+}
+
+function HierarchyCampaign({ campaign, adsets, adsByAdset }: { campaign: any; adsets: any[]; adsByAdset: Map<string, any[]> }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <div className="border border-primary/30 rounded-lg my-2 bg-card overflow-hidden">
+      <button onClick={() => setOpen(!open)} className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted/40 transition-colors bg-primary/5">
+        {open ? <ChevronDown className="h-4 w-4 text-primary" /> : <ChevronRight className="h-4 w-4 text-primary" />}
+        <Megaphone className="h-3.5 w-3.5 text-primary" />
+        <span className="text-xs font-bold truncate flex-1 text-left">{campaign.campaign_name || "Unknown Campaign"}</span>
+        <Badge variant="outline" className="text-[9px] h-4 px-1">{adsets.length} ad sets</Badge>
+        <span className="text-xs font-bold text-destructive">{formatINR(Number(campaign.spend))}</span>
+      </button>
+      <MetricsRow item={campaign} indent={0} />
+      {open && (
+        <div className="pb-2">
+          {adsets.length === 0 ? (
+            <p className="text-[10px] text-muted-foreground px-3 py-1 italic">No active ad sets</p>
+          ) : adsets.map((as) => (
+            <HierarchyAdsetRow key={as.id} adset={as} ads={adsByAdset.get(as.adset_id || as.adset_name || "") || []} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -120,8 +169,8 @@ function DailyAIAdvisor({ date, runningAds, accountTotals }: { date: string; run
         </div>
       )}
       {advice && (
-        <div className="prose prose-xs dark:prose-invert max-w-none text-[11px] leading-relaxed overflow-y-auto flex-1">
-          <ReactMarkdown>{advice}</ReactMarkdown>
+        <div className="prose prose-xs dark:prose-invert max-w-none text-[11px] leading-relaxed overflow-y-auto flex-1 prose-table:text-[10px] prose-th:px-1.5 prose-th:py-1 prose-td:px-1.5 prose-td:py-1 prose-table:border prose-th:bg-muted prose-th:border prose-td:border">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{advice}</ReactMarkdown>
         </div>
       )}
     </div>
@@ -698,26 +747,46 @@ export default function DailyData() {
                     <AdMetric label="CPC" value={formatINR(Number(r.cpc))} />
                     <AdMetric label="Reach" value={formatNumber(r.reach)} />
                     <AdMetric label="Frequency" value={Number(r.frequency).toFixed(2)} />
-                    <AdMetric label="Conv" value={String(r.conversions)} />
+                    <AdMetric label="Sales" value={String(m.qty)} />
                   </div>
 
-                  {/* Running Ads + AI Advisor side-by-side */}
+                  {/* Hierarchy: Campaign → Ad Set → Ad + AI Advisor */}
                   {(() => {
                     const bd = getBreakdownForDate(r.date);
-                    // Running ads = ad-level rows with spend > 0, deduped by ad_id (keep highest spend)
                     const runningAds = dedupeBy(
                       bd.ads.filter((a) => Number(a.spend) > 0),
                       (a) => a.ad_id || `${a.adset_id}-${a.ad_name}`
                     ).sort((a, b) => Number(b.spend) - Number(a.spend));
+                    const runningAdsets = dedupeBy(
+                      bd.adsets.filter((a) => Number(a.spend) > 0),
+                      (a) => a.adset_id || a.adset_name || ""
+                    );
+                    const runningCampaigns = dedupeBy(
+                      bd.campaigns.filter((a) => Number(a.spend) > 0),
+                      (a) => a.campaign_id || a.campaign_name || ""
+                    ).sort((a, b) => Number(b.spend) - Number(a.spend));
 
-                    if (runningAds.length === 0 && bd.ads.length === 0) return null;
+                    if (runningAds.length === 0 && runningCampaigns.length === 0) return null;
+
+                    const adsetsByCampaign = new Map<string, any[]>();
+                    runningAdsets.forEach((as) => {
+                      const key = as.campaign_id || as.campaign_name || "";
+                      if (!adsetsByCampaign.has(key)) adsetsByCampaign.set(key, []);
+                      adsetsByCampaign.get(key)!.push(as);
+                    });
+                    const adsByAdset = new Map<string, any[]>();
+                    runningAds.forEach((ad) => {
+                      const key = ad.adset_id || ad.adset_name || "";
+                      if (!adsByAdset.has(key)) adsByAdset.set(key, []);
+                      adsByAdset.get(key)!.push(ad);
+                    });
 
                     const isExpanded = expandedDates.has(r.date);
                     const accountTotals = {
                       spend: Number(r.ad_spend), impressions: r.impressions, clicks: r.clicks,
                       ctr: Number(r.ctr), cpc: Number(r.cpc), reach: r.reach,
-                      frequency: Number(r.frequency), conversions: r.conversions,
-                      sales: m.qty, revenue: m.totalRevenue, profit: m.profit, cac: m.cac,
+                      frequency: Number(r.frequency),
+                      manual_sales: m.qty, revenue: m.totalRevenue, profit: m.profit, cac: m.cac,
                     };
 
                     return (
@@ -726,19 +795,22 @@ export default function DailyData() {
                           <Button variant="ghost" size="sm" className="w-full h-8 text-xs gap-1.5 text-muted-foreground hover:text-foreground">
                             {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                             <Megaphone className="h-3 w-3" />
-                            {runningAds.length} Running Ads on this day
+                            {runningCampaigns.length} Campaigns • {runningAdsets.length} Ad Sets • {runningAds.length} Ads
                           </Button>
                         </CollapsibleTrigger>
                         <CollapsibleContent className="mt-2">
                           <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-                            <div className="lg:col-span-2 space-y-1.5 max-h-[500px] overflow-y-auto pr-1">
-                              {runningAds.length === 0 ? (
-                                <p className="text-xs text-muted-foreground text-center py-4">
-                                  No ads were running on this date.
-                                </p>
-                              ) : (
-                                runningAds.map((ad) => <RunningAdRow key={ad.id} ad={ad} />)
-                              )}
+                            <div className="lg:col-span-2 max-h-[600px] overflow-y-auto pr-1">
+                              {runningCampaigns.length === 0 ? (
+                                <p className="text-xs text-muted-foreground text-center py-4">No campaigns running on this date.</p>
+                              ) : runningCampaigns.map((c) => (
+                                <HierarchyCampaign
+                                  key={c.id}
+                                  campaign={c}
+                                  adsets={adsetsByCampaign.get(c.campaign_id || c.campaign_name || "") || []}
+                                  adsByAdset={adsByAdset}
+                                />
+                              ))}
                             </div>
                             <div className="lg:col-span-1">
                               <DailyAIAdvisor date={r.date} runningAds={runningAds} accountTotals={accountTotals} />
