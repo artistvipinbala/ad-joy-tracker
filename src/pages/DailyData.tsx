@@ -12,9 +12,10 @@ import { formatINR, formatNumber, formatPercent } from "@/lib/format";
 import {
   Plus, Pencil, RefreshCw, TrendingUp, TrendingDown, IndianRupee,
   ShoppingCart, DollarSign, Euro, Target, Percent, Wallet, ChevronDown, ChevronRight,
-  Megaphone, Layers, FileImage, Trash2,
+  Megaphone, Layers, FileImage, Trash2, Sparkles, BrainCircuit, Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
+import ReactMarkdown from "react-markdown";
 
 const PRICE_PER_SALE = 589;
 const COMMISSION_RATE = 0.025;
