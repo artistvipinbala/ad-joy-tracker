@@ -746,7 +746,7 @@ export default function DailyData() {
                     <AdMetric label="CPC" value={formatINR(Number(r.cpc))} />
                     <AdMetric label="Reach" value={formatNumber(r.reach)} />
                     <AdMetric label="Frequency" value={Number(r.frequency).toFixed(2)} />
-                    <AdMetric label="Conv" value={String(r.conversions)} />
+                    <AdMetric label="Sales" value={String(m.qty)} />
                   </div>
 
                   {/* Hierarchy: Campaign → Ad Set → Ad + AI Advisor */}
