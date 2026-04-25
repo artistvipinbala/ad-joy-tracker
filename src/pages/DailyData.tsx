@@ -29,111 +29,102 @@ const defaultRow = {
 
 type AdRow = typeof defaultRow;
 
-function BreakdownRow({ name, data, subtitle }: { name: string; data: any; subtitle?: string | null }) {
+// Dedupe rows by a composite key, keeping the row with highest spend
+function dedupeBy<T extends Record<string, any>>(rows: T[], keyFn: (r: T) => string): T[] {
+  const map = new Map<string, T>();
+  for (const r of rows) {
+    const k = keyFn(r);
+    const existing = map.get(k);
+    if (!existing || Number(r.spend) > Number(existing.spend)) map.set(k, r);
+  }
+  return Array.from(map.values());
+}
+
+function RunningAdRow({ ad }: { ad: any }) {
   return (
-    <div className="bg-muted/30 rounded-lg px-3 py-2 border border-border/50">
-      <div className="flex items-center justify-between mb-1">
-        <div>
-          <p className="text-xs font-medium truncate max-w-[200px]">{name}</p>
-          {subtitle && <p className="text-[9px] text-muted-foreground truncate max-w-[200px]">{subtitle}</p>}
+    <div className="bg-muted/30 rounded-lg px-3 py-2 border border-border/50 hover:bg-muted/50 transition-colors">
+      <div className="flex items-center justify-between mb-1.5 gap-2">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <FileImage className="h-3 w-3 shrink-0 text-primary" />
+          <div className="min-w-0">
+            <p className="text-xs font-medium truncate">{ad.ad_name || "Unknown Ad"}</p>
+            <p className="text-[9px] text-muted-foreground truncate">
+              {ad.campaign_name} {ad.adset_name ? `→ ${ad.adset_name}` : ""}
+            </p>
+          </div>
         </div>
-        <span className="text-xs font-bold text-destructive">{formatINR(Number(data.spend))}</span>
+        <span className="text-xs font-bold text-destructive shrink-0">{formatINR(Number(ad.spend))}</span>
       </div>
-      <div className="grid grid-cols-4 md:grid-cols-6 gap-x-3 gap-y-1 text-[10px]">
-        <div><span className="text-muted-foreground">Clicks</span> <span className="font-medium block">{data.clicks}</span></div>
-        <div><span className="text-muted-foreground">CTR</span> <span className="font-medium block">{formatPercent(Number(data.ctr))}</span></div>
-        <div><span className="text-muted-foreground">CPC</span> <span className="font-medium block">{formatINR(Number(data.cpc))}</span></div>
-        <div><span className="text-muted-foreground">CPR</span> <span className="font-medium block">{Number(data.cpr) > 0 ? formatINR(Number(data.cpr)) : "—"}</span></div>
-        <div><span className="text-muted-foreground">Reach</span> <span className="font-medium block">{formatNumber(data.reach)}</span></div>
-        <div><span className="text-muted-foreground">Freq</span> <span className="font-medium block">{Number(data.frequency).toFixed(2)}</span></div>
+      <div className="grid grid-cols-3 md:grid-cols-6 gap-x-3 gap-y-1 text-[10px]">
+        <div><span className="text-muted-foreground">Clicks</span> <span className="font-medium block">{ad.clicks}</span></div>
+        <div><span className="text-muted-foreground">CTR</span> <span className="font-medium block">{formatPercent(Number(ad.ctr))}</span></div>
+        <div><span className="text-muted-foreground">CPC</span> <span className="font-medium block">{formatINR(Number(ad.cpc))}</span></div>
+        <div><span className="text-muted-foreground">CPR</span> <span className="font-medium block">{Number(ad.cpr) > 0 ? formatINR(Number(ad.cpr)) : "—"}</span></div>
+        <div><span className="text-muted-foreground">Reach</span> <span className="font-medium block">{formatNumber(ad.reach)}</span></div>
+        <div><span className="text-muted-foreground">Freq</span> <span className="font-medium block">{Number(ad.frequency).toFixed(2)}</span></div>
       </div>
     </div>
   );
 }
 
-function CampaignTree({ campaign, adsets, ads }: { campaign: any; adsets: any[]; ads: any[] }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <Collapsible open={open} onOpenChange={setOpen} className="border border-border rounded-lg overflow-hidden">
-      <CollapsibleTrigger asChild>
-        <button className="w-full flex items-center gap-2 px-3 py-2 bg-muted/50 hover:bg-muted/80 transition-colors text-left">
-          {open ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronRight className="h-3 w-3 shrink-0" />}
-          <Megaphone className="h-3 w-3 shrink-0 text-primary" />
-          <span className="text-xs font-semibold truncate flex-1">{campaign.campaign_name || "Unknown Campaign"}</span>
-          <span className="text-xs font-bold text-destructive shrink-0">{formatINR(Number(campaign.spend))}</span>
-        </button>
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        <div className="px-3 py-2 space-y-1.5 border-t border-border/50">
-          {/* Campaign metrics */}
-          <div className="grid grid-cols-4 md:grid-cols-6 gap-x-3 gap-y-1 text-[10px] mb-2">
-            <div><span className="text-muted-foreground">Clicks</span> <span className="font-medium block">{campaign.clicks}</span></div>
-            <div><span className="text-muted-foreground">CTR</span> <span className="font-medium block">{formatPercent(Number(campaign.ctr))}</span></div>
-            <div><span className="text-muted-foreground">CPC</span> <span className="font-medium block">{formatINR(Number(campaign.cpc))}</span></div>
-            <div><span className="text-muted-foreground">CPR</span> <span className="font-medium block">{Number(campaign.cpr) > 0 ? formatINR(Number(campaign.cpr)) : "—"}</span></div>
-            <div><span className="text-muted-foreground">Reach</span> <span className="font-medium block">{formatNumber(campaign.reach)}</span></div>
-            <div><span className="text-muted-foreground">Freq</span> <span className="font-medium block">{Number(campaign.frequency).toFixed(2)}</span></div>
-          </div>
-          {/* Ad Sets under this campaign */}
-          {adsets.length > 0 && adsets.map((adset) => (
-            <AdSetTree key={adset.id} adset={adset} ads={ads.filter((a) => a.adset_id === adset.adset_id)} />
-          ))}
-        </div>
-      </CollapsibleContent>
-    </Collapsible>
-  );
-}
+function DailyAIAdvisor({ date, runningAds, accountTotals }: { date: string; runningAds: any[]; accountTotals: any }) {
+  const [loading, setLoading] = useState(false);
+  const [advice, setAdvice] = useState<string>("");
 
-function AdSetTree({ adset, ads }: { adset: any; ads: any[] }) {
-  const [open, setOpen] = useState(false);
+  const runAnalysis = async () => {
+    if (runningAds.length === 0) {
+      toast.info("No running ads on this date to analyze");
+      return;
+    }
+    setLoading(true);
+    try {
+      const compact = runningAds.map((a) => ({
+        ad: a.ad_name, adset: a.adset_name, campaign: a.campaign_name,
+        spend: Number(a.spend), clicks: a.clicks, ctr: Number(a.ctr),
+        cpc: Number(a.cpc), cpr: Number(a.cpr), reach: a.reach,
+        freq: Number(a.frequency), conv: a.conversions,
+        v3s: a.three_second_views, v50: a.fifty_percent_views, v95: a.ninety_five_percent_views,
+      }));
+      const { data, error } = await supabase.functions.invoke("ai-daily-advisor", {
+        body: { date, runningAds: compact, accountTotals },
+      });
+      if (error) throw error;
+      setAdvice(data?.content || "No recommendation");
+    } catch (e: any) {
+      toast.error(e.message || "AI analysis failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <Collapsible open={open} onOpenChange={setOpen} className="ml-3 border-l-2 border-primary/20 pl-2">
-      <CollapsibleTrigger asChild>
-        <button className="w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted/60 transition-colors text-left">
-          {open ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronRight className="h-3 w-3 shrink-0" />}
-          <Layers className="h-3 w-3 shrink-0 text-amber-500" />
-          <span className="text-[11px] font-medium truncate flex-1">{adset.adset_name || "Unknown Ad Set"}</span>
-          <span className="text-[11px] font-bold text-destructive shrink-0">{formatINR(Number(adset.spend))}</span>
-        </button>
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        <div className="pl-4 py-1 space-y-1.5">
-          {/* Ad Set metrics */}
-          <div className="grid grid-cols-4 md:grid-cols-6 gap-x-3 gap-y-1 text-[10px] mb-1">
-            <div><span className="text-muted-foreground">Clicks</span> <span className="font-medium block">{adset.clicks}</span></div>
-            <div><span className="text-muted-foreground">CTR</span> <span className="font-medium block">{formatPercent(Number(adset.ctr))}</span></div>
-            <div><span className="text-muted-foreground">CPC</span> <span className="font-medium block">{formatINR(Number(adset.cpc))}</span></div>
-            <div><span className="text-muted-foreground">CPR</span> <span className="font-medium block">{Number(adset.cpr) > 0 ? formatINR(Number(adset.cpr)) : "—"}</span></div>
-            <div><span className="text-muted-foreground">Reach</span> <span className="font-medium block">{formatNumber(adset.reach)}</span></div>
-            <div><span className="text-muted-foreground">Freq</span> <span className="font-medium block">{Number(adset.frequency).toFixed(2)}</span></div>
-          </div>
-          {/* Ads under this ad set */}
-          {ads.length > 0 && (
-            <div className="space-y-1">
-              {ads.map((ad) => (
-                <div key={ad.id} className="flex items-start gap-2 ml-2 border-l border-muted-foreground/20 pl-2 py-1">
-                  <FileImage className="h-3 w-3 shrink-0 text-muted-foreground mt-0.5" />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <p className="text-[11px] font-medium truncate">{ad.ad_name || "Unknown Ad"}</p>
-                      <span className="text-[10px] font-bold text-destructive shrink-0 ml-2">{formatINR(Number(ad.spend))}</span>
-                    </div>
-                    <div className="grid grid-cols-4 md:grid-cols-6 gap-x-3 text-[10px] mt-0.5">
-                      <div><span className="text-muted-foreground">Clicks</span> <span className="font-medium block">{ad.clicks}</span></div>
-                      <div><span className="text-muted-foreground">CTR</span> <span className="font-medium block">{formatPercent(Number(ad.ctr))}</span></div>
-                      <div><span className="text-muted-foreground">CPC</span> <span className="font-medium block">{formatINR(Number(ad.cpc))}</span></div>
-                      <div><span className="text-muted-foreground">CPR</span> <span className="font-medium block">{Number(ad.cpr) > 0 ? formatINR(Number(ad.cpr)) : "—"}</span></div>
-                      <div><span className="text-muted-foreground">Reach</span> <span className="font-medium block">{formatNumber(ad.reach)}</span></div>
-                      <div><span className="text-muted-foreground">Freq</span> <span className="font-medium block">{Number(ad.frequency).toFixed(2)}</span></div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+    <div className="border border-primary/20 bg-primary/5 rounded-lg p-3 h-full flex flex-col">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1.5">
+          <Sparkles className="h-3.5 w-3.5 text-primary" />
+          <span className="text-xs font-semibold">AI Ad Manager Review</span>
         </div>
-      </CollapsibleContent>
-    </Collapsible>
+        <Button size="sm" variant="ghost" className="h-6 text-[10px] gap-1" onClick={runAnalysis} disabled={loading}>
+          {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <BrainCircuit className="h-3 w-3" />}
+          {loading ? "Analyzing..." : advice ? "Re-analyze" : "Analyze"}
+        </Button>
+      </div>
+      {!advice && !loading && (
+        <p className="text-[11px] text-muted-foreground">
+          Click <strong>Analyze</strong> for AI recommendations on which ads to scale, pause or optimize.
+        </p>
+      )}
+      {loading && (
+        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+          <Loader2 className="h-3 w-3 animate-spin" /> Reviewing {runningAds.length} ads...
+        </div>
+      )}
+      {advice && (
+        <div className="prose prose-xs dark:prose-invert max-w-none text-[11px] leading-relaxed overflow-y-auto flex-1">
+          <ReactMarkdown>{advice}</ReactMarkdown>
+        </div>
+      )}
+    </div>
   );
 }
 
