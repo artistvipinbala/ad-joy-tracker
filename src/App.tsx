@@ -33,20 +33,18 @@ function AppContent() {
   }
 
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route element={<AppLayout />}>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/daily" element={<DailyData />} />
-          <Route path="/monthly" element={<MonthlyOverview />} />
-          <Route path="/expenses" element={<Expenses />} />
-          <Route path="/profit" element={<ProfitCalculator />} />
-          <Route path="/advisor" element={<AIAdvisor />} />
-          <Route path="/settings" element={<SettingsPage />} />
-        </Route>
-        <Route path="*" element={<NotFound />} />
-      </Routes>
-    </BrowserRouter>
+    <Routes>
+      <Route element={<AppLayout />}>
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/daily" element={<DailyData />} />
+        <Route path="/monthly" element={<MonthlyOverview />} />
+        <Route path="/expenses" element={<Expenses />} />
+        <Route path="/profit" element={<ProfitCalculator />} />
+        <Route path="/advisor" element={<AIAdvisor />} />
+        <Route path="/settings" element={<SettingsPage />} />
+      </Route>
+      <Route path="*" element={<NotFound />} />
+    </Routes>
   );
 }
 
@@ -55,7 +53,9 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <AppContent />
+      <BrowserRouter>
+        <AppContent />
+      </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
 );
