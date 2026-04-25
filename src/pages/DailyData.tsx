@@ -749,23 +749,43 @@ export default function DailyData() {
                     <AdMetric label="Conv" value={String(r.conversions)} />
                   </div>
 
-                  {/* Running Ads + AI Advisor side-by-side */}
+                  {/* Hierarchy: Campaign → Ad Set → Ad + AI Advisor */}
                   {(() => {
                     const bd = getBreakdownForDate(r.date);
-                    // Running ads = ad-level rows with spend > 0, deduped by ad_id (keep highest spend)
                     const runningAds = dedupeBy(
                       bd.ads.filter((a) => Number(a.spend) > 0),
                       (a) => a.ad_id || `${a.adset_id}-${a.ad_name}`
                     ).sort((a, b) => Number(b.spend) - Number(a.spend));
+                    const runningAdsets = dedupeBy(
+                      bd.adsets.filter((a) => Number(a.spend) > 0),
+                      (a) => a.adset_id || a.adset_name || ""
+                    );
+                    const runningCampaigns = dedupeBy(
+                      bd.campaigns.filter((a) => Number(a.spend) > 0),
+                      (a) => a.campaign_id || a.campaign_name || ""
+                    ).sort((a, b) => Number(b.spend) - Number(a.spend));
 
-                    if (runningAds.length === 0 && bd.ads.length === 0) return null;
+                    if (runningAds.length === 0 && runningCampaigns.length === 0) return null;
+
+                    const adsetsByCampaign = new Map<string, any[]>();
+                    runningAdsets.forEach((as) => {
+                      const key = as.campaign_id || as.campaign_name || "";
+                      if (!adsetsByCampaign.has(key)) adsetsByCampaign.set(key, []);
+                      adsetsByCampaign.get(key)!.push(as);
+                    });
+                    const adsByAdset = new Map<string, any[]>();
+                    runningAds.forEach((ad) => {
+                      const key = ad.adset_id || ad.adset_name || "";
+                      if (!adsByAdset.has(key)) adsByAdset.set(key, []);
+                      adsByAdset.get(key)!.push(ad);
+                    });
 
                     const isExpanded = expandedDates.has(r.date);
                     const accountTotals = {
                       spend: Number(r.ad_spend), impressions: r.impressions, clicks: r.clicks,
                       ctr: Number(r.ctr), cpc: Number(r.cpc), reach: r.reach,
-                      frequency: Number(r.frequency), conversions: r.conversions,
-                      sales: m.qty, revenue: m.totalRevenue, profit: m.profit, cac: m.cac,
+                      frequency: Number(r.frequency),
+                      manual_sales: m.qty, revenue: m.totalRevenue, profit: m.profit, cac: m.cac,
                     };
 
                     return (
@@ -774,19 +794,22 @@ export default function DailyData() {
                           <Button variant="ghost" size="sm" className="w-full h-8 text-xs gap-1.5 text-muted-foreground hover:text-foreground">
                             {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                             <Megaphone className="h-3 w-3" />
-                            {runningAds.length} Running Ads on this day
+                            {runningCampaigns.length} Campaigns • {runningAdsets.length} Ad Sets • {runningAds.length} Ads
                           </Button>
                         </CollapsibleTrigger>
                         <CollapsibleContent className="mt-2">
                           <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-                            <div className="lg:col-span-2 space-y-1.5 max-h-[500px] overflow-y-auto pr-1">
-                              {runningAds.length === 0 ? (
-                                <p className="text-xs text-muted-foreground text-center py-4">
-                                  No ads were running on this date.
-                                </p>
-                              ) : (
-                                runningAds.map((ad) => <RunningAdRow key={ad.id} ad={ad} />)
-                              )}
+                            <div className="lg:col-span-2 max-h-[600px] overflow-y-auto pr-1">
+                              {runningCampaigns.length === 0 ? (
+                                <p className="text-xs text-muted-foreground text-center py-4">No campaigns running on this date.</p>
+                              ) : runningCampaigns.map((c) => (
+                                <HierarchyCampaign
+                                  key={c.id}
+                                  campaign={c}
+                                  adsets={adsetsByCampaign.get(c.campaign_id || c.campaign_name || "") || []}
+                                  adsByAdset={adsByAdset}
+                                />
+                              ))}
                             </div>
                             <div className="lg:col-span-1">
                               <DailyAIAdvisor date={r.date} runningAds={runningAds} accountTotals={accountTotals} />
