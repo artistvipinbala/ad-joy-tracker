@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 const PRICE_PER_SALE = 589;
 const COMMISSION_RATE = 0.025;
