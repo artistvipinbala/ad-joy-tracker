@@ -169,8 +169,8 @@ function DailyAIAdvisor({ date, runningAds, accountTotals }: { date: string; run
         </div>
       )}
       {advice && (
-        <div className="prose prose-xs dark:prose-invert max-w-none text-[11px] leading-relaxed overflow-y-auto flex-1">
-          <ReactMarkdown>{advice}</ReactMarkdown>
+        <div className="prose prose-xs dark:prose-invert max-w-none text-[11px] leading-relaxed overflow-y-auto flex-1 prose-table:text-[10px] prose-th:px-1.5 prose-th:py-1 prose-td:px-1.5 prose-td:py-1 prose-table:border prose-th:bg-muted prose-th:border prose-td:border">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{advice}</ReactMarkdown>
         </div>
       )}
     </div>
