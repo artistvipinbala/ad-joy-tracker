@@ -14,25 +14,43 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
-    const systemPrompt = `You are an elite Meta (Facebook) Ads performance strategist for a course-selling business in INR (₹). 
-Analyze ONLY the running ads for ${date} and give SHORT, scannable, actionable recommendations per ad.
+    const totalSpend = Number(accountTotals?.spend || 0);
+    const manualSales = Number(accountTotals?.manual_sales || 0);
+    const realCAC = manualSales > 0 ? totalSpend / manualSales : 0;
 
-For EACH ad return one verdict:
-- ✅ SCALE (increase budget %) — strong CPR/CTR/ROAS
-- ⚠️ OPTIMIZE — workable but watch metrics
-- ❌ PAUSE — wasting spend, no conversions, high CPR / low CTR / high frequency
+    const systemPrompt = `You are an elite Meta (Facebook) Ads strategist for a course business in INR (₹).
 
-Output format (markdown, compact):
-1. **Quick Summary** (2-3 lines)
-2. **Per-Ad Actions** — bullet list: \`Ad name\` → ✅/⚠️/❌ + 1-line reason + suggested action (e.g. "increase budget 30%", "pause", "test new creative")
-3. **🎯 Top 3 Next Steps** for today
+IMPORTANT — DATA RULES:
+- Facebook "conversions" pixel data is UNRELIABLE for this business. IGNORE the FB conversion field.
+- The TRUE conversion source is MANUAL SALES (manual_sales) entered by the owner. Use this for ROAS/CAC truth.
+- For per-ad analysis, use SPEND, CTR, CPC, CPR, FREQ, REACH only. Do NOT cite FB conversions per ad.
+- True account CAC = Total Spend ÷ Manual Sales = ₹${realCAC.toFixed(0)}
 
-Be direct. No fluff. Use INR (₹). Mention specific numbers.`;
+OUTPUT FORMAT (strict markdown, no fluff):
 
-    const userPrompt = `Account totals for ${date}:
-${JSON.stringify(accountTotals, null, 2)}
+### 📊 Day Summary
+2 short lines. Mention: total spend, manual sales, true CAC, profit verdict.
 
-Running ads (only ads with spend > 0 today):
+### 🎯 Per-Ad Action Table
+A markdown table with these EXACT columns:
+
+| Ad | Spend | CTR | CPC | Freq | Verdict | Action |
+|---|---|---|---|---|---|---|
+
+- Verdict: ✅ SCALE / ⚠️ OPTIMIZE / ❌ PAUSE
+- Action: ONE short phrase (e.g. "+30% budget", "Pause now", "New creative", "Lower bid")
+- Sort by spend desc. Truncate ad name to ~25 chars.
+
+### 🚀 Top 3 Next Steps
+Numbered list, 1 line each, specific actions for tomorrow.
+
+Be direct. Use ₹. No paragraphs of explanation — the table is the answer.`;
+
+    const userPrompt = `Date: ${date}
+Account totals (truth):
+${JSON.stringify({ ...accountTotals, true_cac: realCAC }, null, 2)}
+
+Running ads (FB metrics — ignore the 'conv' field, it's wrong):
 ${JSON.stringify(runningAds, null, 2)}`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
