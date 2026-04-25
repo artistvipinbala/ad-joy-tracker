@@ -22,8 +22,8 @@ async function fetchFBInsights(accountId: string, accessToken: string, level: st
   let nextUrl: string | null = url
 
   while (nextUrl) {
-    const resp = await fetch(nextUrl)
-    const json = await resp.json()
+    const resp: Response = await fetch(nextUrl)
+    const json: any = await resp.json()
     if (json.error) throw new Error(`Facebook API error (${level}): ${json.error.message}`)
     if (json.data) allData.push(...json.data)
     nextUrl = json.paging?.next || null
@@ -173,7 +173,7 @@ Deno.serve(async (req) => {
   } catch (err) {
     console.error('Sync error:', err)
     return new Response(
-      JSON.stringify({ error: err.message }),
+      JSON.stringify({ error: err instanceof Error ? err.message : String(err) }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
