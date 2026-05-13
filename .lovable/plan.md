@@ -1,61 +1,29 @@
+## Goal
+The Facebook token is now valid and the sync function is fetching data successfully. However, every `ad_breakdown` upsert at the adset/ad level fails with a `23505 duplicate key` error, so daily breakdown rows never get refreshed.
 
+## Root cause
+- The unique index `ad_breakdown_unique_idx` is defined on **expressions**:
+  `(date, level, COALESCE(campaign_id,''), COALESCE(adset_id,''), COALESCE(ad_id,''))`
+- The edge function calls `upsert(..., { onConflict: 'date,level,campaign_id,adset_id,ad_id' })` — plain columns.
+- PostgREST cannot match a column list to an expression index, so the upsert degrades to a plain insert and collides with existing rows.
 
-## Facebook Ad Analytics Portal - Plan
+## Plan
 
-### Overview
-A data analytics dashboard to track Facebook Ad performance, sales, expenses, and profit — with AI-powered recommendations.
+1. **Database migration**
+   - Drop the expression-based `ad_breakdown_unique_idx`.
+   - Recreate it as a plain unique constraint with `NULLS NOT DISTINCT` (Postgres 15+) on
+     `(date, level, campaign_id, adset_id, ad_id)`.
+   - This preserves the same uniqueness semantics (treating NULL adset/ad as a single key) while exposing a real column-based conflict target.
 
-### Pages & Features
+2. **No edge function code change needed**
+   - The existing `onConflict: 'date,level,campaign_id,adset_id,ad_id'` will then resolve correctly and rows will update in place.
 
-#### 1. Dashboard (Home)
-- **Summary cards**: Total Spend, Total Sales, Total Profit, ROAS (Return on Ad Spend)
-- **Today's snapshot**: Quick view of today's key metrics
-- **Profit chart**: Daily/weekly/monthly profit trend line
-- **GST collected display** (separate from profit)
+3. **Verify**
+   - Redeploy is not required (function unchanged), but trigger a sync run and confirm:
+     - No more `23505` errors in `sync-facebook-ads` logs.
+     - `ad_breakdown` rows for today/yesterday show updated `spend`, `impressions`, etc.
+     - Account-level `ad_daily_data` upserts continue to work (they already do).
 
-#### 2. Daily Ad Data (Table View)
-- Table with daily rows showing: Date, Ad Spend, Impressions, Clicks, CTR, CPL, CPR, CPC, 3-Second Views, 50% Video Views, 95% Video Views, Frequency, Reach, Sales Count, Revenue
-- **Date range filter** and single-day picker
-- Auto-fetch from **Facebook Marketing API** (requires Facebook Business account credentials)
-- Edit/override capability for any row
-
-#### 3. Monthly Overview
-- Aggregated monthly table with same metrics
-- Month-over-month comparison
-- Monthly profit/loss breakdown including: Ad Spend, GST collected, Other expenses, Net Profit
-
-#### 4. Expenses & Revenue Entry
-- **Manual entry form** for:
-  - TagMango sales (count, amount per sale, GST collected)
-  - Other expenses: AI tools, software subscriptions, team costs, etc.
-  - Custom expense categories (add/edit)
-- Product/service price configuration with GST rate
-- Expense history table
-
-#### 5. Profit Calculator
-- **Revenue**: Sales × Price
-- **Costs**: Ad Spend + Other Expenses
-- **GST**: Track collected GST separately
-- **Net Profit**: Revenue - Costs - GST payable
-- Visual profit breakdown (pie/bar charts)
-
-#### 6. AI Advisor
-- AI-powered analysis of your ad performance data
-- Recommendations: scale/pause campaigns, budget adjustments, audience insights
-- Ask questions about your data in natural language
-- Powered by Lovable AI (Gemini)
-
-### Tech Stack
-- **Frontend**: React + Tailwind + Recharts for charts
-- **Backend**: Lovable Cloud (Supabase) for data storage
-- **Facebook API**: Edge function to fetch ad data via Facebook Marketing API
-- **AI**: Lovable AI Gateway for recommendations
-- **Currency**: INR (₹) throughout
-
-### Database Tables
-- `ad_daily_data` — daily Facebook ad metrics
-- `sales_entries` — manual TagMango sales entries
-- `expenses` — other costs (AI tools, subscriptions, etc.)
-- `expense_categories` — custom categories
-- `product_config` — product prices and GST rates
-
+## Out of scope
+- Token rotation (already done).
+- Any UI changes — dashboard will start showing fresh data automatically once sync completes.
